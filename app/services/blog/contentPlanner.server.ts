@@ -114,7 +114,7 @@ export async function getTodaysPlan(shop: string, today: Date) {
     where: {
       shop,
       scheduledDate: { gte: start, lt: end },
-      status: "planned",
+      status: { in: ["planned", "failed"] },
     },
   });
 }

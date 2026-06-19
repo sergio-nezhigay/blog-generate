@@ -10,7 +10,12 @@ primary_region = "iad"
 [deploy]
   release_command = "npm run setup"
 
+[processes]
+  web = "npm run start"
+  cron = "node scripts/cron-runner.mjs"
+
 [http_service]
+  processes = ["web"]
   internal_port = 3000
   force_https = true
   auto_stop_machines = "stop"
@@ -18,5 +23,11 @@ primary_region = "iad"
   min_machines_running = 1
 
 [[vm]]
+  processes = ["web"]
   size = "shared-cpu-1x"
   memory = "512mb"
+
+[[vm]]
+  processes = ["cron"]
+  size = "shared-cpu-1x"
+  memory = "256mb"
