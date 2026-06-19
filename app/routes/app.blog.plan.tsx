@@ -8,6 +8,7 @@ import {
   getWeekStart,
   weekAlreadyPlanned,
 } from "../services/blog/contentPlanner.server";
+import { publishPlanItem } from "../services/blog/articleWriter.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -39,12 +40,24 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     if (!settings?.blogId) {
       return { error: "Configure a blog in Settings before generating a plan." };
     }
-
     const existingArticles = await getShopifyArticles(admin, settings.blogId);
     const existingTitles = existingArticles.map((a) => a.title);
-
     await generateWeeklyPlan(session.shop, settings, existingTitles);
-    return { success: true };
+    return { success: true, intent: "generatePlan" };
+  }
+
+  if (intent === "publishNow") {
+    const planId = parseInt(formData.get("planId") as string, 10);
+    if (!planId) return { error: "Missing planId" };
+    try {
+      await publishPlanItem(admin, planId, session.shop);
+      return { success: true, intent: "publishNow", planId };
+    } catch (err) {
+      return {
+        error: err instanceof Error ? err.message : "Publish failed",
+        intent: "publishNow",
+      };
+    }
   }
 
   return { error: "Unknown intent" };
@@ -65,13 +78,25 @@ export default function BlogPlan() {
   const isGenerating =
     fetcher.state !== "idle" && fetcher.formData?.get("intent") === "generatePlan";
 
+  const publishingPlanId =
+    fetcher.state !== "idle" && fetcher.formData?.get("intent") === "publishNow"
+      ? Number(fetcher.formData.get("planId"))
+      : null;
+
+  function submitPublish(planId: number) {
+    fetcher.submit({ intent: "publishNow", planId: String(planId) }, { method: "post" });
+  }
+
   return (
     <s-page heading="Content Plan">
       {fetcher.data && "error" in fetcher.data && (
         <s-banner tone="critical">{fetcher.data.error}</s-banner>
       )}
-      {fetcher.data && "success" in fetcher.data && (
+      {fetcher.data && "success" in fetcher.data && fetcher.data.intent === "generatePlan" && (
         <s-banner tone="success">Weekly plan generated — 7 articles scheduled.</s-banner>
+      )}
+      {fetcher.data && "success" in fetcher.data && fetcher.data.intent === "publishNow" && (
+        <s-banner tone="success">Article published to Shopify.</s-banner>
       )}
 
       {!settings?.blogId && (
@@ -92,17 +117,15 @@ export default function BlogPlan() {
           >
             {planExists ? "Plan already generated" : "Generate Weekly Plan"}
           </s-button>
-          <s-link href="/app/blog/settings">
-            Settings
-          </s-link>
+          <s-link href="/app/blog/settings">Settings</s-link>
         </s-stack>
       </s-section>
 
       {plans.length === 0 ? (
         <s-section>
           <s-paragraph>
-            No articles planned yet. Click "Generate Weekly Plan" to create
-            this week's content calendar.
+            No articles planned yet. Click &quot;Generate Weekly Plan&quot; to create this
+            week&apos;s content calendar.
           </s-paragraph>
         </s-section>
       ) : (
@@ -110,7 +133,7 @@ export default function BlogPlan() {
           <table style={tableStyle}>
             <thead>
               <tr>
-                {["Date", "Day", "Category", "Topic", "Status"].map((h) => (
+                {["Date", "Day", "Category", "Topic", "Status", ""].map((h) => (
                   <th key={h} style={thStyle}>
                     {h}
                   </th>
@@ -122,6 +145,7 @@ export default function BlogPlan() {
                 const badge = STATUS_BADGE[plan.status] ?? STATUS_BADGE.planned;
                 const date = new Date(plan.scheduledDate);
                 const dayName = DAY_NAMES[plan.dayIndex] ?? "";
+                const isPublishing = publishingPlanId === plan.id;
                 return (
                   <tr key={plan.id} style={trStyle}>
                     <td style={tdStyle}>
@@ -135,7 +159,7 @@ export default function BlogPlan() {
                     <td style={tdStyle}>
                       <span style={categoryStyle}>{plan.category}</span>
                     </td>
-                    <td style={{ ...tdStyle, maxWidth: "360px" }}>
+                    <td style={{ ...tdStyle, maxWidth: "340px" }}>
                       {plan.articleUrl ? (
                         <s-link href={plan.articleUrl} target="_blank">
                           {plan.topic}
@@ -150,15 +174,42 @@ export default function BlogPlan() {
                       )}
                     </td>
                     <td style={tdStyle}>
-                      <s-badge tone={badge.tone as "neutral" | "success" | "critical" | "caution" | "info" | "warning"}>
+                      <s-badge
+                        tone={
+                          badge.tone as
+                            | "neutral"
+                            | "success"
+                            | "critical"
+                            | "caution"
+                            | "info"
+                            | "warning"
+                        }
+                      >
                         {badge.label}
                       </s-badge>
+                    </td>
+                    <td style={{ ...tdStyle, width: "110px" }}>
+                      {plan.status === "planned" || plan.status === "failed" ? (
+                        <s-button
+                          onClick={() => submitPublish(plan.id)}
+                          {...(isPublishing ? { loading: true } : {})}
+                          {...(publishingPlanId !== null && !isPublishing
+                            ? { disabled: true }
+                            : {})}
+                        >
+                          {isPublishing ? "Publishing…" : "Publish"}
+                        </s-button>
+                      ) : null}
                     </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
+          <p style={noteStyle}>
+            Publishing an article takes ~60 seconds — keywords, research, and article
+            generation run in sequence. Keep this page open while it runs.
+          </p>
         </s-section>
       )}
     </s-page>
@@ -197,4 +248,11 @@ const categoryStyle: React.CSSProperties = {
   background: "#f1f2f3",
   color: "#6d7175",
   whiteSpace: "nowrap",
+};
+
+const noteStyle: React.CSSProperties = {
+  fontSize: "12px",
+  color: "#6d7175",
+  marginTop: "8px",
+  padding: "0 12px",
 };

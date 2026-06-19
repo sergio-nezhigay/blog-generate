@@ -56,17 +56,20 @@ export async function publishArticleToShopify(
     title: string;
     body_html: string;
     summary_html: string;
-    tags: string;
+    tags: string[];
     published: boolean;
+    authorName?: string;
   },
-): Promise<{ id: string; handle: string; onlineStoreUrl: string | null }> {
+): Promise<{ id: string; handle: string; blogHandle: string }> {
   const response = await admin.graphql(`
-    mutation ArticleCreate($blogId: ID!, $article: ArticleCreateInput!) {
-      articleCreate(blogId: $blogId, article: $article) {
+    mutation ArticleCreate($article: ArticleCreateInput!) {
+      articleCreate(article: $article) {
         article {
           id
           handle
-          onlineStoreUrl
+          blog {
+            handle
+          }
         }
         userErrors {
           field
@@ -76,13 +79,14 @@ export async function publishArticleToShopify(
     }
   `, {
     variables: {
-      blogId,
       article: {
+        blogId,
         title: article.title,
         body: article.body_html,
         summary: article.summary_html,
         tags: article.tags,
         isPublished: article.published,
+        author: { name: article.authorName ?? "ENCANTO" },
       },
     },
   });
@@ -90,7 +94,7 @@ export async function publishArticleToShopify(
   const { data } = await response.json() as {
     data: {
       articleCreate: {
-        article: { id: string; handle: string; onlineStoreUrl: string | null } | null;
+        article: { id: string; handle: string; blog: { handle: string } } | null;
         userErrors: { field: string; message: string }[];
       };
     };
@@ -103,5 +107,9 @@ export async function publishArticleToShopify(
     throw new Error('Article creation returned no article');
   }
 
-  return data.articleCreate.article;
+  return {
+    id: data.articleCreate.article.id,
+    handle: data.articleCreate.article.handle,
+    blogHandle: data.articleCreate.article.blog.handle,
+  };
 }
