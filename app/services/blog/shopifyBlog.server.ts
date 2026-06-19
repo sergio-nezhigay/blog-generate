@@ -59,8 +59,18 @@ export async function publishArticleToShopify(
     tags: string[];
     published: boolean;
     authorName?: string;
+    seoTitle?: string;
+    metaDescription?: string;
   },
 ): Promise<{ id: string; handle: string; blogHandle: string }> {
+  const metafields: { namespace: string; key: string; value: string; type: string }[] = [];
+  if (article.seoTitle?.trim()) {
+    metafields.push({ namespace: "seo", key: "title", value: article.seoTitle.trim(), type: "single_line_text_field" });
+  }
+  if (article.metaDescription?.trim()) {
+    metafields.push({ namespace: "seo", key: "description", value: article.metaDescription.trim(), type: "single_line_text_field" });
+  }
+
   const response = await admin.graphql(`
     mutation ArticleCreate($article: ArticleCreateInput!) {
       articleCreate(article: $article) {
@@ -87,6 +97,7 @@ export async function publishArticleToShopify(
         tags: article.tags,
         isPublished: article.published,
         author: { name: article.authorName ?? "ENCANTO" },
+        ...(metafields.length > 0 && { metafields }),
       },
     },
   });

@@ -127,12 +127,17 @@ Output only the HTML body content. No <html>, <head>, <body> tags. Start directl
   );
 }
 
+function buildSeoTitle(title: string, brandName: string): string {
+  const branded = `${title} | ${brandName}`;
+  return branded.length <= 65 ? branded : title;
+}
+
 async function generateArticleMetadata(
   topic: string,
   bodyHtml: string,
   keywords: string[],
 ): Promise<{ title: string; metaDescription: string; tags: string[]; excerpt: string }> {
-  const preview = bodyHtml.slice(0, 500);
+  const preview = bodyHtml.slice(0, 1500);
   return chatCompleteJSON<{
     title: string;
     metaDescription: string;
@@ -141,17 +146,23 @@ async function generateArticleMetadata(
   }>(
     [
       {
+        role: "system",
+        content: `You are an SEO specialist for a premium makeup tools brand. ${ICP_CONTEXT}
+Write metadata that ranks in Google and earns clicks from professional makeup artists.`,
+      },
+      {
         role: "user",
         content: `Generate SEO metadata for this blog article.
 
 Original title: "${topic}"
 Primary keyword: ${keywords[0] ?? topic}
-Article preview: ${preview}...
+Article preview (first 1500 chars):
+${preview}
 
 Respond with JSON:
 {
-  "title": "Final SEO-optimized title (50-65 chars, includes primary keyword)",
-  "metaDescription": "Compelling meta description (145-155 chars, includes primary keyword, answers search intent)",
+  "title": "Final SEO-optimized title (50-65 chars, includes primary keyword near the start)",
+  "metaDescription": "Compelling meta description — MUST start with an action verb (Discover, Master, Learn, Explore), include primary keyword within first 20 words, answer the search intent, HARD MAX 155 chars, complete sentence, no truncation",
   "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
   "excerpt": "Two-sentence article excerpt for blog listing page."
 }`,
@@ -210,13 +221,17 @@ export async function publishPlanItem(
     const safeHtml = sanitizeHTML(bodyHtml);
 
     // 7. Publish to Shopify
+    const displayTitle = (meta.title && meta.title.trim()) || plan.topic;
+    const brandName = settings.brandName || "ENCANTO";
     const published = await publishArticleToShopify(admin, settings.blogId, {
-      title: (meta.title && meta.title.trim()) || plan.topic,
+      title: displayTitle,
       body_html: safeHtml,
       summary_html: meta.excerpt || "",
       tags: Array.isArray(meta.tags) ? meta.tags : [],
       published: true,
-      authorName: settings.brandName || "ENCANTO",
+      authorName: brandName,
+      seoTitle: buildSeoTitle(displayTitle, brandName),
+      metaDescription: meta.metaDescription || "",
     });
 
     // Construct storefront URL from blog/article handles
