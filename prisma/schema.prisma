@@ -32,3 +32,38 @@ model Session {
   refreshToken        String?
   refreshTokenExpires DateTime?
 }
+
+model BlogContentPlan {
+  id              Int       @id @default(autoincrement())
+  shop            String
+  weekStart       DateTime  @db.Date
+  dayIndex        Int
+  scheduledDate   DateTime  @db.Date
+  topic           String
+  category        String
+  contentFormat   String
+  targetWordCount Int       @default(2000)
+  keywords        String[]  @default([])
+  status          String    @default("planned")
+  articleId       String?
+  articleUrl      String?
+  publishedAt     DateTime?
+  errorMessage    String?
+  createdAt       DateTime  @default(now())
+
+  @@index([shop, scheduledDate, status])
+  @@index([shop, weekStart])
+}
+
+model BlogSettings {
+  id          Int      @id @default(autoincrement())
+  shop        String   @unique
+  blogId      String   @default("")
+  blogTitle   String   @default("")
+  brandName   String   @default("ENCANTO")
+  ctaUrl      String   @default("/pages/contact")
+  servicesUrl String   @default("/pages/collections/all")
+  active      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
