@@ -130,7 +130,7 @@ export default function BlogPlan() {
         </s-section>
       ) : (
         <s-section heading="Scheduled Articles">
-          <table style={tableStyle}>
+          <div style={{ overflowX: "auto" }}><table style={tableStyle}>
             <thead>
               <tr>
                 {["Date", "Day", "Category", "Topic", "Status", ""].map((h) => (
@@ -205,7 +205,7 @@ export default function BlogPlan() {
                 );
               })}
             </tbody>
-          </table>
+          </table></div>
           <p style={noteStyle}>
             Publishing an article takes ~60 seconds — keywords, research, and article
             generation run in sequence. Keep this page open while it runs.

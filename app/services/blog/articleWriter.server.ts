@@ -132,6 +132,13 @@ function buildSeoTitle(title: string, brandName: string): string {
   return branded.length <= 65 ? branded : title;
 }
 
+function truncateMetaDescription(text: string): string {
+  if (text.length <= 155) return text;
+  const cut = text.slice(0, 152);
+  const lastSpace = cut.lastIndexOf(" ");
+  return (lastSpace > 100 ? cut.slice(0, lastSpace) : cut) + "...";
+}
+
 async function generateArticleMetadata(
   topic: string,
   bodyHtml: string,
@@ -231,7 +238,7 @@ export async function publishPlanItem(
       published: true,
       authorName: brandName,
       seoTitle: buildSeoTitle(displayTitle, brandName),
-      metaDescription: meta.metaDescription || "",
+      metaDescription: truncateMetaDescription(meta.metaDescription || ""),
     });
 
     // Construct storefront URL from blog/article handles

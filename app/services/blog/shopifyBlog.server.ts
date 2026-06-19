@@ -65,10 +65,10 @@ export async function publishArticleToShopify(
 ): Promise<{ id: string; handle: string; blogHandle: string }> {
   const metafields: { namespace: string; key: string; value: string; type: string }[] = [];
   if (article.seoTitle?.trim()) {
-    metafields.push({ namespace: "seo", key: "title", value: article.seoTitle.trim(), type: "single_line_text_field" });
+    metafields.push({ namespace: "global", key: "title_tag", value: article.seoTitle.trim(), type: "single_line_text_field" });
   }
   if (article.metaDescription?.trim()) {
-    metafields.push({ namespace: "seo", key: "description", value: article.metaDescription.trim(), type: "single_line_text_field" });
+    metafields.push({ namespace: "global", key: "description_tag", value: article.metaDescription.trim(), type: "single_line_text_field" });
   }
 
   const response = await admin.graphql(`
