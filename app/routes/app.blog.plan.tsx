@@ -60,6 +60,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
   }
 
+  if (intent === "resetToPlan") {
+    const planId = parseInt(formData.get("planId") as string, 10);
+    if (!planId) return { error: "Missing planId" };
+    await db.blogContentPlan.update({
+      where: { id: planId, shop: session.shop },
+      data: { status: "planned", articleId: null, articleUrl: null, publishedAt: null, errorMessage: null },
+    });
+    return { success: true, intent: "resetToPlan" };
+  }
+
   return { error: "Unknown intent" };
 };
 
@@ -83,8 +93,17 @@ export default function BlogPlan() {
       ? Number(fetcher.formData.get("planId"))
       : null;
 
+  const resettingPlanId =
+    fetcher.state !== "idle" && fetcher.formData?.get("intent") === "resetToPlan"
+      ? Number(fetcher.formData.get("planId"))
+      : null;
+
   function submitPublish(planId: number) {
     fetcher.submit({ intent: "publishNow", planId: String(planId) }, { method: "post" });
+  }
+
+  function submitReset(planId: number) {
+    fetcher.submit({ intent: "resetToPlan", planId: String(planId) }, { method: "post" });
   }
 
   return (
@@ -96,7 +115,18 @@ export default function BlogPlan() {
         <s-banner tone="success">Weekly plan generated — 7 articles scheduled.</s-banner>
       )}
       {fetcher.data && "success" in fetcher.data && fetcher.data.intent === "publishNow" && (
-        <s-banner tone="success">Article published to Shopify.</s-banner>
+        <s-banner tone="success">
+          Article {settings?.testMode ? "created as draft (test mode)" : "published"} to Shopify.
+        </s-banner>
+      )}
+      {fetcher.data && "success" in fetcher.data && fetcher.data.intent === "resetToPlan" && (
+        <s-banner tone="info">Article reset to planned — ready to republish.</s-banner>
+      )}
+      {settings?.testMode && (
+        <s-banner tone="warning">
+          Test mode is ON — articles publish as drafts (not visible on storefront, not indexed by Google).
+          Disable in <s-link href="/app/blog/settings">Settings</s-link>.
+        </s-banner>
       )}
 
       {!settings?.blogId && (
@@ -199,6 +229,14 @@ export default function BlogPlan() {
                         >
                           {isPublishing ? "Publishing…" : "Publish"}
                         </s-button>
+                      ) : plan.status === "published" ? (
+                        <button
+                          onClick={() => submitReset(plan.id)}
+                          disabled={resettingPlanId === plan.id || publishingPlanId !== null || (resettingPlanId !== null && resettingPlanId !== plan.id)}
+                          style={resetBtnStyle}
+                        >
+                          {resettingPlanId === plan.id ? "…" : "Reset"}
+                        </button>
                       ) : null}
                     </td>
                   </tr>
@@ -207,8 +245,7 @@ export default function BlogPlan() {
             </tbody>
           </table></div>
           <p style={noteStyle}>
-            Publishing an article takes ~60 seconds — keywords, research, and article
-            generation run in sequence. Keep this page open while it runs.
+            Publishing takes 90–120 seconds (keywords → research → article → images → Shopify). Keep this page open.
           </p>
         </s-section>
       )}
@@ -255,4 +292,14 @@ const noteStyle: React.CSSProperties = {
   color: "#6d7175",
   marginTop: "8px",
   padding: "0 12px",
+};
+
+const resetBtnStyle: React.CSSProperties = {
+  background: "none",
+  border: "none",
+  color: "#6d7175",
+  fontSize: "13px",
+  cursor: "pointer",
+  padding: "4px 0",
+  textDecoration: "underline",
 };

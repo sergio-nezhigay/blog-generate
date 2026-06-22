@@ -292,17 +292,14 @@ export async function publishPlanItem(
       const h2Headings = extractH2Headings(safeHtml);
       sectionAlts = [h2Headings[1] ?? plan.topic, h2Headings[3] ?? plan.topic];
 
-      console.log("[images] Generating images for article:", plan.topic);
       const { heroB64, sectionB64s } = await generateImages(plan.topic, h2Headings);
 
       heroImageUrl = await uploadImageToShopifyCDN(admin, heroB64, `${plan.topic} — ENCANTO`);
-      console.log("[images] Hero uploaded:", heroImageUrl);
 
       const sectionUrls: string[] = [];
       for (let i = 0; i < sectionB64s.length; i++) {
         const cdnUrl = await uploadImageToShopifyCDN(admin, sectionB64s[i], `${sectionAlts[i]} — ENCANTO`);
         sectionUrls.push(cdnUrl);
-        console.log(`[images] Section ${i} uploaded:`, cdnUrl);
       }
 
       finalBodyHtml = injectSectionImages(safeHtml, sectionUrls, sectionAlts);
@@ -318,7 +315,7 @@ export async function publishPlanItem(
       body_html: finalBodyHtml,
       summary_html: meta.excerpt || "",
       tags: Array.isArray(meta.tags) ? meta.tags : [],
-      published: true,
+      published: !settings.testMode,
       authorName: brandName,
       seoTitle: buildSeoTitle(displayTitle, brandName),
       metaDescription: truncateMetaDescription(meta.metaDescription || ""),
@@ -328,7 +325,6 @@ export async function publishPlanItem(
     if (heroImageUrl) {
       try {
         await setArticleHeroImage(admin, published.id, heroImageUrl, `${displayTitle} — ENCANTO`);
-        console.log("[images] Hero image set on article");
       } catch (heroErr) {
         console.error("[images] Failed to set hero image:", heroErr instanceof Error ? heroErr.message : heroErr);
       }

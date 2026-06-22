@@ -23,6 +23,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     ctaUrl: string;
     servicesUrl: string;
     active: boolean;
+    testMode: boolean;
   };
 
   await db.blogSettings.upsert({
@@ -44,6 +45,7 @@ export default function BlogSettings() {
   const [ctaUrl, setCtaUrl] = useState(settings?.ctaUrl ?? "/pages/contact");
   const [servicesUrl, setServicesUrl] = useState(settings?.servicesUrl ?? "/pages/collections/all");
   const [active, setActive] = useState(settings?.active ?? false);
+  const [testMode, setTestMode] = useState(settings?.testMode ?? false);
 
   const isSubmitting = fetcher.state !== "idle";
   const saved = fetcher.state === "idle" && fetcher.data?.success;
@@ -57,7 +59,7 @@ export default function BlogSettings() {
 
   const handleSave = () => {
     fetcher.submit(
-      { blogId, blogTitle, brandName, ctaUrl, servicesUrl, active },
+      { blogId, blogTitle, brandName, ctaUrl, servicesUrl, active, testMode },
       { method: "POST", encType: "application/json" },
     );
   };
@@ -132,14 +134,27 @@ export default function BlogSettings() {
       </s-section>
 
       <s-section heading="Automation">
-        <s-stack direction="inline" gap="base">
-          <input
-            id="active-toggle"
-            type="checkbox"
-            checked={active}
-            onChange={(e) => setActive(e.target.checked)}
-          />
-          <label htmlFor="active-toggle">Enable daily publishing</label>
+        <s-stack direction="block" gap="base">
+          <s-stack direction="inline" gap="base">
+            <input
+              id="active-toggle"
+              type="checkbox"
+              checked={active}
+              onChange={(e) => setActive(e.target.checked)}
+            />
+            <label htmlFor="active-toggle">Enable daily publishing</label>
+          </s-stack>
+          <s-stack direction="inline" gap="base">
+            <input
+              id="testmode-toggle"
+              type="checkbox"
+              checked={testMode}
+              onChange={(e) => setTestMode(e.target.checked)}
+            />
+            <label htmlFor="testmode-toggle">
+              Test mode — publish as draft (hidden from Google, not live on storefront)
+            </label>
+          </s-stack>
         </s-stack>
       </s-section>
 
