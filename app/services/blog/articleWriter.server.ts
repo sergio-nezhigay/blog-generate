@@ -1,7 +1,8 @@
 import type { BlogSettings } from "@prisma/client";
 import db from "../../db.server";
 import { chatComplete, chatCompleteJSON } from "./openai.server";
-import { getShopifyArticles, publishArticleToShopify } from "./shopifyBlog.server";
+import { getShopifyArticles, publishArticleToShopify, uploadImageToShopifyCDN, setArticleHeroImage } from "./shopifyBlog.server";
+import { getOpenAI } from "./openai.server";
 import type { ShopifyArticle } from "./shopifyBlog.server";
 
 type AdminGraphQL = (query: string, options?: { variables?: Record<string, unknown> }) => Promise<Response>;
@@ -179,6 +180,62 @@ Respond with JSON:
   );
 }
 
+function extractH2Headings(html: string): string[] {
+  const matches = [...html.matchAll(/<h2[^>]*>(.*?)<\/h2>/gi)];
+  return matches.map(m => m[1].replace(/<[^>]+>/g, "").trim());
+}
+
+async function generateSingleImage(prompt: string): Promise<string> {
+  const openai = getOpenAI();
+  // DEBUG: gpt-image-1, low quality JPEG — ~$0.01/image, returns b64_json (~125KB)
+  const resp = await openai.images.generate({
+    model: "gpt-image-1",
+    prompt: prompt.slice(0, 900),
+    n: 1,
+    size: "1024x1024",
+    quality: "low" as "low",
+    // @ts-ignore output_format not yet in SDK types
+    output_format: "jpeg",
+  });
+  // PRODUCTION (replace above):
+  // quality: "high", output_format: "jpeg", size: "1792x1024"
+  const b64 = resp.data?.[0]?.b64_json;
+  if (!b64) throw new Error("OpenAI image generation returned no b64_json");
+  return b64;
+}
+
+async function generateImages(
+  title: string,
+  h2Headings: string[],
+): Promise<{ heroB64: string; sectionB64s: string[] }> {
+  const heroPrompt = `Professional studio photo of high-end makeup brushes and cosmetic tools for article about: ${title.slice(0, 100)}. Elegant product arrangement on neutral background. No text, no words, no letters. Soft studio lighting.`;
+  const heroB64 = await generateSingleImage(heroPrompt);
+
+  // Pick 2nd and 4th headings (index 1 and 3) for section images
+  const sectionHeadings = [h2Headings[1], h2Headings[3]].filter(Boolean) as string[];
+  const sectionB64s: string[] = [];
+  for (const heading of sectionHeadings) {
+    const sectionPrompt = `Professional macro photo of beauty and makeup products representing: ${heading.slice(0, 120)}. Studio setting, clean neutral background. No text, no words, no letters.`;
+    sectionB64s.push(await generateSingleImage(sectionPrompt));
+  }
+
+  return { heroB64, sectionB64s };
+}
+
+function injectSectionImages(html: string, imageUrls: string[], alts: string[]): string {
+  // Insert img tags after the 2nd H2 (h2Count=1) and 4th H2 (h2Count=3)
+  let h2Count = -1;
+  return html.replace(/<\/h2>/gi, (match) => {
+    h2Count++;
+    const urlIndex = h2Count === 1 ? 0 : h2Count === 3 ? 1 : -1;
+    if (urlIndex >= 0 && imageUrls[urlIndex]) {
+      const alt = (alts[urlIndex] ?? "").replace(/"/g, "&quot;");
+      return `</h2>\n<img src="${imageUrls[urlIndex]}" alt="${alt}" style="width:100%;border-radius:8px;margin:24px 0" loading="lazy">`;
+    }
+    return match;
+  });
+}
+
 function sanitizeHTML(html: string): string {
   return html
     .replace(/<h1[^>]*>[\s\S]*?<\/h1>/gi, "")
@@ -227,12 +284,38 @@ export async function publishPlanItem(
     // 6. Sanitize
     const safeHtml = sanitizeHTML(bodyHtml);
 
-    // 7. Publish to Shopify
+    // 7. Generate images and inject into body (non-blocking — article still publishes on failure)
+    let finalBodyHtml = safeHtml;
+    let heroImageUrl: string | null = null;
+    let sectionAlts: string[] = [];
+    try {
+      const h2Headings = extractH2Headings(safeHtml);
+      sectionAlts = [h2Headings[1] ?? plan.topic, h2Headings[3] ?? plan.topic];
+
+      console.log("[images] Generating images for article:", plan.topic);
+      const { heroB64, sectionB64s } = await generateImages(plan.topic, h2Headings);
+
+      heroImageUrl = await uploadImageToShopifyCDN(admin, heroB64, `${plan.topic} — ENCANTO`);
+      console.log("[images] Hero uploaded:", heroImageUrl);
+
+      const sectionUrls: string[] = [];
+      for (let i = 0; i < sectionB64s.length; i++) {
+        const cdnUrl = await uploadImageToShopifyCDN(admin, sectionB64s[i], `${sectionAlts[i]} — ENCANTO`);
+        sectionUrls.push(cdnUrl);
+        console.log(`[images] Section ${i} uploaded:`, cdnUrl);
+      }
+
+      finalBodyHtml = injectSectionImages(safeHtml, sectionUrls, sectionAlts);
+    } catch (imgErr) {
+      console.error("[images] Failed, continuing without images:", imgErr instanceof Error ? imgErr.message : imgErr);
+    }
+
+    // 8. Publish to Shopify
     const displayTitle = (meta.title && meta.title.trim()) || plan.topic;
     const brandName = settings.brandName || "ENCANTO";
     const published = await publishArticleToShopify(admin, settings.blogId, {
       title: displayTitle,
-      body_html: safeHtml,
+      body_html: finalBodyHtml,
       summary_html: meta.excerpt || "",
       tags: Array.isArray(meta.tags) ? meta.tags : [],
       published: true,
@@ -241,10 +324,20 @@ export async function publishPlanItem(
       metaDescription: truncateMetaDescription(meta.metaDescription || ""),
     });
 
+    // 9. Set hero image on the published article
+    if (heroImageUrl) {
+      try {
+        await setArticleHeroImage(admin, published.id, heroImageUrl, `${displayTitle} — ENCANTO`);
+        console.log("[images] Hero image set on article");
+      } catch (heroErr) {
+        console.error("[images] Failed to set hero image:", heroErr instanceof Error ? heroErr.message : heroErr);
+      }
+    }
+
     // Construct storefront URL from blog/article handles
     const articleUrl = `https://${shop}/blogs/${published.blogHandle}/${published.handle}`;
 
-    // 8. Update plan row
+    // 10. Update plan row
     await db.blogContentPlan.update({
       where: { id: planId },
       data: {

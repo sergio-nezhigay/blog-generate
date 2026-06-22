@@ -68,3 +68,10 @@ Post-publish pass that reads all published articles, finds ones with fewer than 
 - [ ] Image storage: Shopify Files API (simplest) vs external CDN?
 - [ ] Article refresher scope: year-only or also fact-refresh via Perplexity?
 - [ ] Internal linker: run on all articles or only new ones?
+
+
+виправити теми
+оглавление стікі
+faq вигляд
+intent - останні 3 статті на цю тему
+seo json всі перевірити
