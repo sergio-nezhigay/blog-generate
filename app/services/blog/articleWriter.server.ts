@@ -285,6 +285,7 @@ export async function publishPlanItem(
     const safeHtml = sanitizeHTML(bodyHtml);
 
     // 7. Generate images and inject into body (non-blocking — article still publishes on failure)
+    const TEST_PLACEHOLDER_IMAGE = "https://cdn.shopify.com/s/files/1/0931/1715/3605/files/article-image_ae12866e-ff85-453e-8126-c60b0982a430.jpg?v=1782118191";
     let finalBodyHtml = safeHtml;
     let heroImageUrl: string | null = null;
     let sectionAlts: string[] = [];
@@ -292,17 +293,20 @@ export async function publishPlanItem(
       const h2Headings = extractH2Headings(safeHtml);
       sectionAlts = [h2Headings[1] ?? plan.topic, h2Headings[3] ?? plan.topic];
 
-      const { heroB64, sectionB64s } = await generateImages(plan.topic, h2Headings);
-
-      heroImageUrl = await uploadImageToShopifyCDN(admin, heroB64, `${plan.topic} — ENCANTO`);
-
-      const sectionUrls: string[] = [];
-      for (let i = 0; i < sectionB64s.length; i++) {
-        const cdnUrl = await uploadImageToShopifyCDN(admin, sectionB64s[i], `${sectionAlts[i]} — ENCANTO`);
-        sectionUrls.push(cdnUrl);
+      if (settings.testMode) {
+        // Skip OpenAI in test mode — use placeholder to avoid generation costs
+        heroImageUrl = TEST_PLACEHOLDER_IMAGE;
+        finalBodyHtml = injectSectionImages(safeHtml, [TEST_PLACEHOLDER_IMAGE, TEST_PLACEHOLDER_IMAGE], sectionAlts);
+      } else {
+        const { heroB64, sectionB64s } = await generateImages(plan.topic, h2Headings);
+        heroImageUrl = await uploadImageToShopifyCDN(admin, heroB64, `${plan.topic} — ENCANTO`);
+        const sectionUrls: string[] = [];
+        for (let i = 0; i < sectionB64s.length; i++) {
+          const cdnUrl = await uploadImageToShopifyCDN(admin, sectionB64s[i], `${sectionAlts[i]} — ENCANTO`);
+          sectionUrls.push(cdnUrl);
+        }
+        finalBodyHtml = injectSectionImages(safeHtml, sectionUrls, sectionAlts);
       }
-
-      finalBodyHtml = injectSectionImages(safeHtml, sectionUrls, sectionAlts);
     } catch (imgErr) {
       console.error("[images] Failed, continuing without images:", imgErr instanceof Error ? imgErr.message : imgErr);
     }
