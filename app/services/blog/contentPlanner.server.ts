@@ -13,50 +13,47 @@ export interface ContentCategory {
 export const CONTENT_CATEGORIES: ContentCategory[] = [
   {
     dayIndex: 0,
-    name: "must-have-tools",
-    format: "listicle",
-    titlePattern: "X Best [Tool/Product] for [Professional Technique] in 2026",
+    name: "brush-spotlight",
+    format: "brush-spotlight",
+    titlePattern: "Best [Fiber Type] Brushes for [Technique]: What You Need",
   },
   {
     dayIndex: 1,
-    name: "tool-comparison",
-    format: "comparison",
-    titlePattern:
-      "[Tool A] vs [Tool B]: Which Is Better for Professional Makeup Artists?",
+    name: "look-tutorial",
+    format: "look-tutorial",
+    titlePattern: "How to Get the [Look Name] Eye Look: Step-by-Step Guide",
   },
   {
     dayIndex: 2,
-    name: "technique-guide",
-    format: "technique-guide",
-    titlePattern: "How to [Apply/Create] [Look or Technique] Step-by-Step",
+    name: "tool-vs-tool",
+    format: "comparison",
+    titlePattern: "[Tool A] vs [Tool B]: Which One Do You Actually Need?",
   },
   {
     dayIndex: 3,
-    name: "product-guide",
-    format: "product-guide",
+    name: "brow-and-lash",
+    format: "brow-and-lash",
     titlePattern:
-      "Complete Guide to [Product Category]: What Professional MUAs Use in 2026",
+      "Complete Guide to [Brow/Lash Topic]: Tools, Tips & Techniques",
   },
   {
     dayIndex: 4,
-    name: "pro-tips",
-    format: "pro-tips",
+    name: "artist-secrets",
+    format: "artist-secrets",
     titlePattern:
-      "X Professional Makeup Artist Tips for [Skill or Situation] in 2026",
+      "X Pro Secrets for [Topic] Every Makeup Artist Swears By",
   },
   {
     dayIndex: 5,
-    name: "trend",
-    format: "trend",
-    titlePattern:
-      "[Season/Year] Makeup Trends: Colors, Techniques, and Tools to Know",
+    name: "kit-builder",
+    format: "kit-builder",
+    titlePattern: "How to Build Your [Occasion] Makeup Kit: A Complete Guide",
   },
   {
     dayIndex: 6,
     name: "tool-care",
     format: "tool-care",
-    titlePattern:
-      "How to Clean and Maintain Your [Tool Type]: A Professional Guide",
+    titlePattern: "How to Clean Your [Tool Type]: Full Care Guide",
   },
 ];
 
