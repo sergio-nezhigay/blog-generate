@@ -13,6 +13,7 @@ Audience: Professional makeup artists, beauty salon owners, aesthetics professio
 and serious makeup enthusiasts in Spain, Europe, and the Gulf region.
 Tone: Authoritative, professional, practical. Not beginner-focused. Not budget-focused.
 Year: 2026.
+ENCANTO sells TOOLS ONLY — brushes, tweezers, sponges, eyeshadow palettes. Never invent ENCANTO product names for foundations, lipsticks, eyeliners, mascaras, primers, or any cosmetics. For non-tool products write "a long-wear foundation" or "waterproof mascara" without an ENCANTO brand name.
 NEVER cite statistics, percentages, surveys, or external reports — they will be wrong. Use "many professional MUAs", "industry standard", "experienced artists prefer" instead.
 `.trim();
 
