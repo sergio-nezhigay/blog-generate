@@ -17,17 +17,6 @@ ENCANTO sells TOOLS ONLY — brushes, tweezers, sponges, eyeshadow palettes. Nev
 NEVER cite statistics, percentages, surveys, or external reports — they will be wrong. Use "many professional MUAs", "industry standard", "experienced artists prefer" instead.
 `.trim();
 
-const FORMAT_OVERRIDES: Record<string, string> = {
-  "kit-builder": `
-FORMAT RULES for kit-builder:
-- Structure the article as: intro → tool breakdown by category (base/complexion, eyes, brows, lips, application tools) → occasion-specific tips → maintenance note → CTA
-- List at least 8 specific ENCANTO tools or product types by name with a one-sentence use case each
-- Use the specific occasion from the title (wedding, editorial, etc.) consistently throughout — never say "occasion" generically
-- NO FAQ section
-- NO "Trends" section
-- NO sustainability/eco-packaging tangents
-`.trim(),
-};
 
 async function enrichKeywords(topic: string, category: string): Promise<string[]> {
   const result = await chatCompleteJSON<{ keywords: string[] }>(
@@ -126,7 +115,7 @@ KEYWORDS: ${keywords.join(", ")}
 
 RESEARCH CONTEXT:
 ${research}
-${FORMAT_OVERRIDES[category] ? `\n${FORMAT_OVERRIDES[category]}\n` : ""}
+
 REQUIRED STRUCTURE (output raw HTML only, no markdown):
 1. <p class="answer-first"><strong>[2-3 sentence direct answer to the title — optimized for AI/chatbot snippet citation]</strong></p>
 2. <h2 id="introduction">Introduction</h2> — 150-200 words with a hook
