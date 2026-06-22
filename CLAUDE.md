@@ -80,6 +80,24 @@ The app uses Shopify Polaris Web Components (`<s-page>`, `<s-banner>`, `<s-butto
 
 The `ICP_CONTEXT` constant in `articleWriter.server.ts` is injected into every OpenAI system prompt — it defines brand, audience, tone, and year context.
 
+## Reading store data (preferred approach)
+
+Use `shopify store execute` (Shopify CLI) to fetch article/product/blog data directly — it is faster and cheaper than browser automation. The admin session is always authenticated.
+
+```bash
+# Authenticate once (persists):
+shopify store auth --store drmtdf-we.myshopify.com --scopes read_content,read_online_store_pages
+
+# Fetch an article by ID:
+shopify store execute --store drmtdf-we.myshopify.com \
+  --query 'query GetArticle($id: ID!) { article(id: $id) { id title body summary } }' \
+  --variables '{"id": "gid://shopify/Article/<ID>"}'
+```
+
+The article numeric ID comes from the Shopify admin URL: `.../content/articles/751050162501` → `gid://shopify/Article/751050162501`.
+
+Use browser automation (`mcp__claude-in-chrome__*`) only when you need to interact with the UI (click buttons, fill forms, verify visual rendering) — not for reading data.
+
 ## Environment variables
 
 Required at runtime:

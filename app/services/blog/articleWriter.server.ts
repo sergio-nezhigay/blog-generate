@@ -13,7 +13,20 @@ Audience: Professional makeup artists, beauty salon owners, aesthetics professio
 and serious makeup enthusiasts in Spain, Europe, and the Gulf region.
 Tone: Authoritative, professional, practical. Not beginner-focused. Not budget-focused.
 Year: 2026.
+NEVER cite statistics, percentages, surveys, or external reports — they will be wrong. Use "many professional MUAs", "industry standard", "experienced artists prefer" instead.
 `.trim();
+
+const FORMAT_OVERRIDES: Record<string, string> = {
+  "kit-builder": `
+FORMAT RULES for kit-builder:
+- Structure the article as: intro → tool breakdown by category (base/complexion, eyes, brows, lips, application tools) → occasion-specific tips → maintenance note → CTA
+- List at least 8 specific ENCANTO tools or product types by name with a one-sentence use case each
+- Use the specific occasion from the title (wedding, editorial, etc.) consistently throughout — never say "occasion" generically
+- NO FAQ section
+- NO "Trends" section
+- NO sustainability/eco-packaging tangents
+`.trim(),
+};
 
 async function enrichKeywords(topic: string, category: string): Promise<string[]> {
   const result = await chatCompleteJSON<{ keywords: string[] }>(
@@ -112,13 +125,13 @@ KEYWORDS: ${keywords.join(", ")}
 
 RESEARCH CONTEXT:
 ${research}
-
+${FORMAT_OVERRIDES[category] ? `\n${FORMAT_OVERRIDES[category]}\n` : ""}
 REQUIRED STRUCTURE (output raw HTML only, no markdown):
 1. <p class="answer-first"><strong>[2-3 sentence direct answer to the title — optimized for AI/chatbot snippet citation]</strong></p>
 2. <h2 id="introduction">Introduction</h2> — 150-200 words with a hook
 3. <nav class="toc"><h3>In This Article</h3><ul>[<li><a href="#section-id">Section Name</a></li> for each H2]</ul></nav>
-4. [7-10 <h2> sections, each 150-200 words, with at least one specific statistic, data point, or concrete example]
-5. <h2 id="faq">Frequently Asked Questions</h2> — 5-7 Q&A using <details><summary>Question</summary><p>Answer</p></details>
+4. [7-10 <h2> sections, each 150-200 words, with concrete examples and professional insights — no invented statistics]
+5. <h2 id="faq">Frequently Asked Questions</h2> — 5-7 Q&A using <details><summary>Question</summary><p>Answer</p></details> (omit if FORMAT RULES above say NO FAQ)
 6. <div class="cta-block"><p>Call to action paragraph linking to <a href="${settings.ctaUrl}">${settings.brandName}</a></p></div>
 
 Output only the HTML body content. No <html>, <head>, <body> tags. Start directly with <p class="answer-first">.`,

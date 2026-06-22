@@ -171,11 +171,21 @@ async function generateTopicForCategory(
   attempt = 0,
 ): Promise<string> {
   if (attempt > 3) {
-    // Fallback: return a safe generic title using the pattern
-    return cat.titlePattern
-      .replace("[Tool/Product]", "Makeup Brushes")
-      .replace("[Professional Technique]", "Professionals");
+    const fallbacks: Record<string, string> = {
+      "kit-builder": "How to Build a Wedding Makeup Kit: Every Tool You Need",
+    };
+    return (
+      fallbacks[cat.name] ??
+      cat.titlePattern
+        .replace("[Tool/Product]", "Makeup Brushes")
+        .replace("[Professional Technique]", "Professionals")
+    );
   }
+
+  const categoryHint =
+    cat.name === "kit-builder"
+      ? "\nCRITICAL: Replace [Occasion] with ONE specific event type chosen from: wedding, bridal party, editorial shoot, runway show, makeup competition, client photoshoot. Never use the word 'occasion' literally in the title."
+      : "";
 
   const result = await chatCompleteJSON<{ topic: string }>(
     [
@@ -189,7 +199,7 @@ async function generateTopicForCategory(
 
 Category: ${cat.name}
 Format: ${cat.format}
-Title pattern to follow: ${cat.titlePattern}
+Title pattern to follow: ${cat.titlePattern}${categoryHint}
 
 Requirements:
 - The title must be 50–70 characters
