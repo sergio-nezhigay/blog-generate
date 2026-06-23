@@ -248,6 +248,17 @@ function sanitizeHTML(html: string): string {
     .replace(/application\/ld\+json/gi, "");
 }
 
+function restructureArticleLayout(html: string): string {
+  const navMatch = html.match(/<nav\s+class="toc">[\s\S]*?<\/nav>/i);
+  if (!navMatch) return html;
+
+  const nav = navMatch[0];
+  const beforeNav = html.slice(0, navMatch.index!);
+  const afterNav = html.slice(navMatch.index! + nav.length);
+
+  return `${beforeNav}<div class="article-layout"><aside class="article-toc">${nav}</aside><div class="article-body">${afterNav}</div></div>`;
+}
+
 export async function publishPlanItem(
   admin: { graphql: AdminGraphQL },
   planId: number,
@@ -284,8 +295,8 @@ export async function publishPlanItem(
     // 5. Metadata
     const meta = await generateArticleMetadata(plan.topic, bodyHtml, keywords);
 
-    // 6. Sanitize
-    const safeHtml = sanitizeHTML(bodyHtml);
+    // 6. Sanitize + restructure layout
+    const safeHtml = restructureArticleLayout(sanitizeHTML(bodyHtml));
 
     // 7. Generate images and inject into body (non-blocking — article still publishes on failure)
     const TEST_PLACEHOLDER_IMAGE = "https://cdn.shopify.com/s/files/1/0931/1715/3605/files/article-image_ae12866e-ff85-453e-8126-c60b0982a430.jpg?v=1782118191";

@@ -36,4 +36,10 @@ cron.schedule('0 10 * * *', () => {
   call('/api/cron/daily');
 });
 
-console.log('[cron] Scheduler running. Next: Mon 09:00 UTC weekly, daily 10:00 UTC.');
+// Daily 11:00 UTC — retry in case 10:00 run hit a transient timeout
+cron.schedule('0 11 * * *', () => {
+  console.log('[cron] Running daily article publish retry...');
+  call('/api/cron/daily');
+});
+
+console.log('[cron] Scheduler running. Next: Mon 09:00 UTC weekly, daily 10:00 UTC (retry 11:00 UTC).');
