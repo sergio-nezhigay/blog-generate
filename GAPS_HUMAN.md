@@ -20,11 +20,11 @@
 
 ### 🟢 Quick Wins (small effort, real SEO impact)
 
-**1. SEO Metafields**  
+**1. SEO Metafields**  -task completed
 Google reads the `<title>` and `<meta name="description">` from Shopify metafields (`seo.title`, `seo.description`) — not from the article title or summary fields. We generate both values already but never send them to Shopify. Without this, Google picks whatever it wants for title/description.  
 *Files:* `shopifyBlog.server.ts`, `articleWriter.server.ts`
 
-**2. Retry cron at 11:00 UTC**  
+**2. Retry cron at 11:00 UTC**  - task completed 
 Single daily run means a transient OpenAI/Shopify timeout = missed article until tomorrow. Add a second cron at 11:00 UTC pointing at the same `/api/cron/daily` endpoint — it's already idempotent (skips if already published).  
 *Files:* `scripts/cron-runner.mjs`
 
@@ -52,7 +52,7 @@ Weekly pass that detects articles with stale year references in titles (e.g. "Be
 
 ### 🔴 Larger (high value, 3–5 days each)
 
-**7. Image Generation**  
+**7. Image Generation**  -task completed
 Prototype generates a 16:9 hero image per article using Google Gemini image model — minimalist dark background, NO text in image. Uploads to storage (Supabase in prototype; Shopify Files API is cleaner for us), then attaches to Shopify article. Runs as a separate cron job (every 5 min in 10–11 UTC window) so it doesn't block article publishing. Uses `imageStatus: pending → done / failed` tracking in DB with 3-attempt cap.  
 *Files:* new `imageGenerator.server.ts`, new `api.cron.image.tsx`, `schema.prisma` (add image fields), `cron-runner.mjs`
 
@@ -65,7 +65,7 @@ Post-publish pass that reads all published articles, finds ones with fewer than 
 ## Decision Checklist
 
 - [ ] Confirm which AI models to add (Perplexity? Gemini for images?)
-- [ ] Image storage: Shopify Files API (simplest) vs external CDN?
+- [ ] Image storage: Shopify Files API (simplest) vs external CDN? - solved
 - [ ] Article refresher scope: year-only or also fact-refresh via Perplexity?
 - [ ] Internal linker: run on all articles or only new ones?
 
@@ -74,4 +74,7 @@ Post-publish pass that reads all published articles, finds ones with fewer than 
 оглавление стікі
 faq вигляд
 intent - останні 3 статті на цю тему
-seo json всі перевірити
+seo json done
+
+1 стилізація done
+2 можливість зьбільшення контексту

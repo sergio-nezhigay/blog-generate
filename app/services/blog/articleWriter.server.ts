@@ -244,8 +244,32 @@ function sanitizeHTML(html: string): string {
     .replace(/<h1[^>]*>[\s\S]*?<\/h1>/gi, "")
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-    .replace(/<link[^>]*>/gi, "")
-    .replace(/application\/ld\+json/gi, "");
+    .replace(/<link[^>]*>/gi, "");
+}
+
+function extractFaqItems(html: string): Array<{ q: string; a: string }> {
+  const items: Array<{ q: string; a: string }> = [];
+  const pattern = /<details[^>]*>[\s\S]*?<summary[^>]*>([\s\S]*?)<\/summary>[\s\S]*?<p[^>]*>([\s\S]*?)<\/p>[\s\S]*?<\/details>/gi;
+  let match;
+  while ((match = pattern.exec(html)) !== null) {
+    const q = match[1].replace(/<[^>]+>/g, "").trim();
+    const a = match[2].replace(/<[^>]+>/g, "").trim();
+    if (q && a) items.push({ q, a });
+  }
+  return items;
+}
+
+function buildFaqPageSchema(items: Array<{ q: string; a: string }>): string {
+  const schema = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: items.map(({ q, a }) => ({
+      "@type": "Question",
+      name: q,
+      acceptedAnswer: { "@type": "Answer", text: a },
+    })),
+  };
+  return `\n<script type="application/ld+json">\n${JSON.stringify(schema, null, 2)}\n</script>`;
 }
 
 function restructureArticleLayout(html: string): string {
@@ -325,13 +349,19 @@ export async function publishPlanItem(
       console.error("[images] Failed, continuing without images:", imgErr instanceof Error ? imgErr.message : imgErr);
     }
 
-    // 8. Publish to Shopify
+    // 8. Inject FAQPage JSON-LD if article has a FAQ section
+    const faqItems = extractFaqItems(finalBodyHtml);
+    if (faqItems.length > 0) {
+      finalBodyHtml += buildFaqPageSchema(faqItems);
+    }
+
+    // 9. Publish to Shopify
     const displayTitle = (meta.title && meta.title.trim()) || plan.topic;
     const brandName = settings.brandName || "ENCANTO";
     const published = await publishArticleToShopify(admin, settings.blogId, {
       title: displayTitle,
       body_html: finalBodyHtml,
-      summary_html: meta.excerpt || "",
+      summary_html: truncateMetaDescription(meta.metaDescription || ""),
       tags: Array.isArray(meta.tags) ? meta.tags : [],
       published: !settings.testMode,
       authorName: brandName,
@@ -339,7 +369,7 @@ export async function publishPlanItem(
       metaDescription: truncateMetaDescription(meta.metaDescription || ""),
     });
 
-    // 9. Set hero image on the published article
+    // 10. Set hero image on the published article
     if (heroImageUrl) {
       try {
         await setArticleHeroImage(admin, published.id, heroImageUrl, `${displayTitle} — ENCANTO`);
@@ -351,7 +381,7 @@ export async function publishPlanItem(
     // Construct storefront URL from blog/article handles
     const articleUrl = `https://${shop}/blogs/${published.blogHandle}/${published.handle}`;
 
-    // 10. Update plan row
+    // 11. Update plan row
     await db.blogContentPlan.update({
       where: { id: planId },
       data: {
