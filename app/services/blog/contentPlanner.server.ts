@@ -256,6 +256,52 @@ export const QA_CATEGORIES: ContentCategory[] = [
   },
 ];
 
+// --- Extended pool helpers ---
+
+function parseExtendedQAQuestions(settings: BlogSettings): Record<string, string[]> {
+  try {
+    const raw = settings.extendedQAQuestions as unknown as Record<string, string[]>;
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+    return raw;
+  } catch {
+    return {};
+  }
+}
+
+function parseExtendedFashionCategories(settings: BlogSettings): ContentCategory[] {
+  try {
+    const raw = settings.extendedFashionCategories as unknown as Array<{
+      name: string;
+      format: string;
+      titlePattern: string;
+      targetWordCount: number;
+    }>;
+    if (!Array.isArray(raw)) return [];
+    return raw.map((item, idx) => ({
+      dayIndex: 7 + idx,
+      name: item.name,
+      format: item.format,
+      titlePattern: item.titlePattern,
+      weekType: "fashion" as WeekType,
+      targetWordCount: item.targetWordCount ?? 2000,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export function getFullQAPool(settings: BlogSettings, categoryName: string): string[] {
+  const base = QA_CATEGORIES.find((c) => c.name === categoryName)?.questionPool ?? [];
+  const extended = parseExtendedQAQuestions(settings)[categoryName] ?? [];
+  return [...base, ...extended];
+}
+
+export function getAllFashionCategories(settings: BlogSettings): ContentCategory[] {
+  return [...FASHION_CATEGORIES, ...parseExtendedFashionCategories(settings)];
+}
+
+// --- End extended pool helpers ---
+
 const ICP_FILTER = `
 TARGET AUDIENCE: Professional makeup artists (MUAs), beauty salon owners,
 aesthetics professionals, beauty school instructors, and serious makeup
@@ -273,7 +319,7 @@ FOCUS ON: Professional techniques, tool quality, brush care, editorial looks,
 competition with high-end tool brands, product comparisons relevant to working MUAs.
 `.trim();
 
-function getISOWeekNumber(date: Date): number {
+export function getISOWeekNumber(date: Date): number {
   const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
   const dayNum = d.getUTCDay() || 7;
   d.setUTCDate(d.getUTCDate() + 4 - dayNum);
@@ -349,7 +395,28 @@ export async function generateWeeklyPlan(
 ): Promise<PlanResult> {
   const weekStart = getWeekStart(new Date());
   const weekType = options?.weekTypeOverride ?? getWeekType(weekStart);
-  const categories = weekType === "fashion" ? FASHION_CATEGORIES : QA_CATEGORIES;
+
+  let categories: ContentCategory[];
+  if (weekType === "fashion") {
+    const allFashion = getAllFashionCategories(settings);
+    if (allFashion.length <= 7) {
+      categories = allFashion;
+    } else {
+      // Rotate through extended pool: each fashion week picks a different 7
+      const fashionWeekIndex = Math.floor(getISOWeekNumber(weekStart) / 2);
+      const startIdx = (fashionWeekIndex * 7) % allFashion.length;
+      categories = Array.from({ length: 7 }, (_, i) => ({
+        ...allFashion[(startIdx + i) % allFashion.length],
+        dayIndex: i,
+      }));
+    }
+  } else {
+    // Enrich QA pools with DB-extended questions
+    categories = QA_CATEGORIES.map((cat) => ({
+      ...cat,
+      questionPool: getFullQAPool(settings, cat.name),
+    }));
+  }
 
   if (!options?.dryRun && (await weekAlreadyPlanned(shop, weekStart))) {
     return { weekType, topics: [] };

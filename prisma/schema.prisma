@@ -65,6 +65,8 @@ model BlogSettings {
   servicesUrl String   @default("/pages/collections/all")
   active      Boolean  @default(false)
   testMode    Boolean  @default(false)
+  extendedQAQuestions       Json @default("{}")
+  extendedFashionCategories Json @default("[]")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
