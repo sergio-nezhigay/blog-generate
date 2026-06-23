@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Content Pool System — Visual Explainer</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f4f5f7; color: #1a1a2e; font-size: 14px; }
+
+  h1 { font-size: 22px; font-weight: 700; }
+  h2 { font-size: 16px; font-weight: 700; letter-spacing: .3px; }
+  h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: #6d7175; }
+
+  .page { max-width: 1100px; margin: 0 auto; padding: 32px 24px 64px; }
+
+  /* ── HEADER ───────────────────────────────────────────────── */
+  .hero { background: #1a1a2e; color: #fff; border-radius: 12px; padding: 32px 36px; margin-bottom: 32px; }
+  .hero h1 { margin-bottom: 8px; }
+  .hero p  { color: #a0a8c0; font-size: 14px; line-height: 1.6; max-width: 640px; }
+
+  /* ── SECTION WRAPPER ──────────────────────────────────────── */
+  .section { background: #fff; border-radius: 12px; border: 1px solid #e1e3e5; padding: 24px 28px; margin-bottom: 24px; }
+  .section-title { margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1px solid #f0f0f0; }
+
+  /* ── WEEK ALTERNATION ─────────────────────────────────────── */
+  .weeks-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .week-chip {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
+    min-width: 120px; justify-content: center;
+  }
+  .week-fashion { background: #fff4e5; color: #b54708; border: 1.5px solid #f9c584; }
+  .week-qa      { background: #e8f5e9; color: #1b7340; border: 1.5px solid #95d5a6; }
+  .week-label   { font-size: 10px; font-weight: 700; letter-spacing: .8px; }
+
+  .rule-box { background: #f6f6f7; border-left: 4px solid #9e9e9e; border-radius: 6px; padding: 12px 16px; font-size: 13px; color: #444; line-height: 1.5; }
+  .rule-box code { background: #e8e8e8; padding: 1px 5px; border-radius: 3px; font-family: monospace; font-size: 12px; }
+
+  /* ── QA CATEGORIES ────────────────────────────────────────── */
+  .days-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-bottom: 20px; }
+  @media (max-width: 700px) { .days-grid { grid-template-columns: repeat(4, 1fr); } }
+  .day-card {
+    border: 1.5px solid #c8e6c9; border-radius: 8px; padding: 10px 8px; text-align: center;
+    background: #f1f8e9;
+  }
+  .day-label { font-size: 10px; font-weight: 700; color: #6d7175; margin-bottom: 4px; }
+  .day-name  { font-size: 11px; font-weight: 700; color: #2e7d32; line-height: 1.3; }
+
+  /* ── POOL CARD ────────────────────────────────────────────── */
+  .pool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 700px) { .pool-grid { grid-template-columns: 1fr; } }
+
+  .pool-card { border: 1.5px solid #e1e3e5; border-radius: 10px; overflow: hidden; }
+  .pool-header { padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; background: #f9f9f9; border-bottom: 1px solid #e1e3e5; }
+  .pool-header-name { font-weight: 700; font-size: 13px; }
+  .pool-body { padding: 10px 14px; }
+
+  .runway { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 12px; }
+  .runway-good     { background: #e8f5e9; color: #1b7340; }
+  .runway-low      { background: #fff8e1; color: #b45309; }
+  .runway-critical { background: #fdecea; color: #c62828; }
+
+  .q-list { list-style: none; margin-top: 8px; }
+  .q-list li { display: flex; align-items: flex-start; gap: 6px; padding: 4px 0; font-size: 12px; color: #444; border-bottom: 1px dashed #f0f0f0; line-height: 1.4; }
+  .q-list li:last-child { border-bottom: none; }
+  .q-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+  .q-base     { background: #9e9e9e; }
+  .q-extended { background: #2c6ecb; }
+  .q-used     { background: #e0e0e0; text-decoration: line-through; color: #aaa; }
+
+  .pool-legend { display: flex; gap: 12px; margin-top: 10px; font-size: 11px; color: #6d7175; }
+  .pool-legend span { display: flex; align-items: center; gap: 4px; }
+
+  .pool-stats { display: flex; gap: 16px; font-size: 12px; color: #6d7175; margin-top: 6px; }
+  .pool-stats b { color: #1a1a2e; }
+
+  /* ── FASHION CATEGORIES ───────────────────────────────────── */
+  .fashion-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 700px) { .fashion-grid { grid-template-columns: 1fr; } }
+
+  .fashion-card { border: 1.5px solid #e1e3e5; border-radius: 8px; padding: 12px 14px; background: #f9f9f9; }
+  .fashion-card.extended { background: #ebf5fe; border-color: #c4dbf6; }
+  .fc-name { font-weight: 700; font-size: 13px; }
+  .fc-format { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; background: #e1e3e5; color: #6d7175; margin-left: 6px; vertical-align: middle; }
+  .fc-format.extended { background: #c4dbf6; color: #2c6ecb; }
+  .fc-pattern { font-size: 12px; color: #6d7175; margin-top: 4px; font-style: italic; }
+
+  .rotation-box { background: #fff4e5; border: 1.5px solid #f9c584; border-radius: 8px; padding: 14px 16px; margin-top: 16px; font-size: 13px; }
+  .rotation-box h3 { color: #b54708; margin-bottom: 8px; }
+  .rotation-row { display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
+  .rot-chip { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .rot-active   { background: #f9c584; color: #b54708; }
+  .rot-inactive { background: #f0f0f0; color: #999; }
+  .rot-arrow { color: #b54708; font-weight: 700; }
+
+  /* ── FLOW DIAGRAM ─────────────────────────────────────────── */
+  .flow { display: flex; flex-direction: column; gap: 0; }
+  .flow-row { display: flex; align-items: stretch; gap: 0; }
+  .flow-node {
+    background: #fff; border: 1.5px solid #c4dbf6; border-radius: 10px;
+    padding: 14px 18px; flex: 1; min-width: 0;
+  }
+  .flow-node.trigger { background: #1a1a2e; color: #fff; border-color: #1a1a2e; }
+  .flow-node.trigger .fn-title { color: #a0c4ff; }
+  .flow-node.openai  { background: #f0faf0; border-color: #95d5a6; }
+  .flow-node.db      { background: #fff8e1; border-color: #ffe082; }
+  .flow-node.publish { background: #fce4ec; border-color: #f48fb1; }
+
+  .fn-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: #2c6ecb; margin-bottom: 4px; }
+  .fn-main  { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
+  .fn-sub   { font-size: 12px; color: #6d7175; line-height: 1.4; }
+
+  .flow-arrow { display: flex; align-items: center; justify-content: center; width: 36px; flex-shrink: 0; color: #c4c4c4; font-size: 20px; font-weight: 700; }
+  .flow-connector { height: 24px; display: flex; justify-content: center; align-items: center; color: #c4c4c4; font-size: 20px; }
+  .flow-branch { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px; text-transform: uppercase; letter-spacing: .4px; }
+  .badge-fashion { background: #fff4e5; color: #b54708; }
+  .badge-qa      { background: #e8f5e9; color: #1b7340; }
+
+  .step-list { list-style: none; margin-top: 8px; }
+  .step-list li { display: flex; gap: 8px; align-items: flex-start; padding: 5px 0; font-size: 12px; color: #444; border-bottom: 1px dashed #f0f0f0; }
+  .step-list li:last-child { border-bottom: none; }
+  .step-num { font-weight: 700; color: #2c6ecb; font-size: 11px; min-width: 16px; }
+
+  /* ── EXAMPLE ──────────────────────────────────────────────── */
+  .example-flow { display: flex; flex-direction: column; gap: 12px; }
+  .ex-card { border-radius: 8px; padding: 14px 18px; }
+  .ex-card.input  { background: #e8f5e9; border: 1.5px solid #95d5a6; }
+  .ex-card.ai     { background: #f0f4ff; border: 1.5px solid #c4dbf6; }
+  .ex-card.output { background: #fff3e0; border: 1.5px solid #ffcc80; }
+  .ex-card.pub    { background: #fce4ec; border: 1.5px solid #f48fb1; }
+  .ex-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; margin-bottom: 6px; }
+  .ex-label.green  { color: #1b7340; }
+  .ex-label.blue   { color: #2c6ecb; }
+  .ex-label.orange { color: #b54708; }
+  .ex-label.pink   { color: #ad1457; }
+  .ex-content { font-size: 13px; line-height: 1.6; }
+  .ex-content code { background: rgba(0,0,0,.07); padding: 1px 5px; border-radius: 3px; font-family: monospace; font-size: 12px; }
+  .ex-arrow { text-align: center; font-size: 20px; color: #bbb; line-height: 1; }
+
+  /* ── UI MOCKUP ────────────────────────────────────────────── */
+  .mockup { border: 2px solid #e1e3e5; border-radius: 12px; overflow: hidden; }
+  .mockup-bar { background: #f6f6f7; padding: 8px 14px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #e1e3e5; }
+  .mockup-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .mockup-url { background: #fff; border: 1px solid #e1e3e5; border-radius: 4px; padding: 3px 10px; font-size: 11px; color: #6d7175; flex: 1; max-width: 300px; }
+  .mockup-body { padding: 20px; background: #fff; }
+  .mockup-heading { font-size: 18px; font-weight: 700; margin-bottom: 16px; }
+
+  .mock-section-title { font-size: 13px; font-weight: 700; color: #1a1a2e; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #e1e3e5; }
+
+  .mock-pool-row { border: 1px solid #e1e3e5; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+  .mock-pool-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .mock-pool-name { font-weight: 700; font-size: 13px; }
+  .mock-pool-meta { font-size: 11px; color: #6d7175; margin-bottom: 6px; }
+  .mock-btn { display: inline-block; border: 1px solid #8c9196; border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 600; cursor: pointer; background: #f6f6f7; color: #444; }
+  .mock-btn.primary { background: #2c6ecb; color: #fff; border-color: #2c6ecb; }
+
+  .mock-q-chip { display: inline-flex; align-items: center; gap: 4px; background: #f6f6f7; border: 1px solid #e1e3e5; border-radius: 4px; padding: 3px 8px; font-size: 11px; margin: 2px; }
+  .mock-q-chip.user-added { background: #ebf5fe; border-color: #c4dbf6; color: #2c6ecb; }
+  .mock-q-chip .chip-x { color: #d72c0d; cursor: pointer; font-weight: 700; margin-left: 2px; }
+
+  .mock-suggest-area { background: #ebf5fe; border: 1px solid #c4dbf6; border-radius: 6px; padding: 10px; margin-top: 8px; }
+  .mock-suggest-label { font-size: 11px; font-weight: 700; color: #2c6ecb; margin-bottom: 6px; }
+  .mock-suggest-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 12px; border-bottom: 1px dashed #c4dbf6; }
+  .mock-suggest-row:last-child { border-bottom: none; }
+  .mock-suggest-actions { display: flex; gap: 4px; }
+  .mock-check { color: #2c6ecb; font-weight: 700; cursor: pointer; padding: 1px 5px; }
+  .mock-cross { color: #6d7175; cursor: pointer; padding: 1px 5px; }
+
+  .mock-input-row { display: flex; gap: 6px; margin-top: 8px; }
+  .mock-input { border: 1px solid #c9cccf; border-radius: 6px; padding: 5px 10px; font-size: 11px; flex: 1; color: #6d7175; }
+
+  /* ── MISC ─────────────────────────────────────────────────── */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+
+  .callout { border-radius: 8px; padding: 14px 16px; font-size: 13px; line-height: 1.6; }
+  .callout-info    { background: #e8f4fd; border-left: 4px solid #2196f3; color: #1565c0; }
+  .callout-warning { background: #fff8e1; border-left: 4px solid #ffc107; color: #7c5700; }
+  .callout-tip     { background: #e8f5e9; border-left: 4px solid #4caf50; color: #1b5e20; }
+
+  .tag { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px; }
+  .tag-grey { background: #e1e3e5; color: #6d7175; }
+  .tag-blue { background: #c4dbf6; color: #2c6ecb; }
+
+  details { border: 1px solid #e1e3e5; border-radius: 8px; overflow: hidden; }
+  summary { padding: 10px 14px; cursor: pointer; font-weight: 600; font-size: 13px; background: #f6f6f7; }
+  details[open] summary { border-bottom: 1px solid #e1e3e5; }
+  .details-body { padding: 14px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HERO -->
+  <div class="hero">
+    <h1>Content Pool System</h1>
+    <p>How QA Question Pools and Fashion Week Categories drive automatic weekly blog generation for the ENCANTO makeup tools brand.</p>
+  </div>
+
+  <!-- ① WEEK ALTERNATION -->
+  <div class="section">
+    <div class="section-title">
+      <h2>① The Two-Week Alternating Engine</h2>
+    </div>
+
+    <div class="weeks-row">
+      <div class="week-chip week-fashion"><span>Week 1</span><strong>FASHION</strong></div>
+      <div class="week-chip week-qa"><span>Week 2</span><strong>QA</strong></div>
+      <div class="week-chip week-fashion"><span>Week 3</span><strong>FASHION</strong></div>
+      <div class="week-chip week-qa"><span>Week 4</span><strong>QA</strong></div>
+      <div class="week-chip week-fashion"><span>Week 5</span><strong>FASHION</strong></div>
+      <div class="week-chip week-qa"><span>Week 6</span><strong>QA</strong></div>
+      <div class="week-chip week-fashion" style="opacity:.5"><span>Week 7</span><strong>FASHION</strong></div>
+      <div class="week-chip week-qa" style="opacity:.4"><span>Week 8</span><strong>QA</strong></div>
+    </div>
+
+    <div class="rule-box">
+      Every Monday 09:00 UTC the cron job checks: <code>getISOWeekNumber(today) % 2 === 1</code><br>
+      <strong>Odd ISO week</strong> → Fashion/Lifestyle articles &nbsp;|&nbsp;
+      <strong>Even ISO week</strong> → Product Q&amp;A deep-dives
+    </div>
+  </div>
+
+  <!-- ② QA QUESTION POOLS -->
+  <div class="section">
+    <div class="section-title">
+      <h2>② QA Question Pools <span class="badge badge-qa">Even weeks</span></h2>
+    </div>
+
+    <p style="color:#6d7175;margin-bottom:16px;line-height:1.6">A QA week publishes <strong>7 articles</strong> — one article per day, each answering a customer question about one product category. Every category has its own <em>question pool</em> that the AI draws from.</p>
+
+    <div class="days-grid" style="margin-bottom:20px">
+      <div class="day-card"><div class="day-label">Mon</div><div class="day-name">qa-eyeshadow</div></div>
+      <div class="day-card"><div class="day-label">Tue</div><div class="day-name">qa-powder</div></div>
+      <div class="day-card"><div class="day-label">Wed</div><div class="day-name">qa-brushes</div></div>
+      <div class="day-card"><div class="day-label">Thu</div><div class="day-name">qa-lashes</div></div>
+      <div class="day-card"><div class="day-label">Fri</div><div class="day-name">qa-brow-gel</div></div>
+      <div class="day-card"><div class="day-label">Sat</div><div class="day-name">qa-tweezers</div></div>
+      <div class="day-card"><div class="day-label">Sun</div><div class="day-name">qa-brush-wipes</div></div>
+    </div>
+
+    <h3 style="margin-bottom:12px">Sample pools — hover a card to see questions</h3>
+
+    <div class="pool-grid">
+
+      <!-- qa-brushes GOOD -->
+      <div class="pool-card">
+        <div class="pool-header">
+          <div>
+            <span class="pool-header-name">qa-brushes</span>
+          </div>
+          <span class="runway runway-good">🟢 Good</span>
+        </div>
+        <div class="pool-body">
+          <div class="pool-stats">
+            <span>📦 <b>26</b> hardcoded</span>
+            <span>➕ <b>2</b> user-added</span>
+            <span>✅ <b>6</b> published</span>
+            <span>⏳ <b>22</b> remaining</span>
+          </div>
+          <ul class="q-list" style="margin-top:10px">
+            <li><span class="q-dot q-used"></span><span style="color:#aaa;text-decoration:line-through">Do CTR brush hairs shed after washing?</span></li>
+            <li><span class="q-dot q-used"></span><span style="color:#aaa;text-decoration:line-through">Are bristles hand-set or machine-cut?</span></li>
+            <li><span class="q-dot q-base"></span>What wood are CTR brush handles made from?</li>
+            <li><span class="q-dot q-base"></span>How should professional brushes be cared for?</li>
+            <li><span class="q-dot q-base"></span>Which bristle type is best for blending eyeshadow?</li>
+            <li><span class="q-dot q-base"></span>Will CTR bristles fray after contact with brow henna?</li>
+            <li><span class="q-dot q-extended" style="background:#2c6ecb"></span><strong style="color:#2c6ecb">Can CTR brushes handle wet application?</strong> <span class="tag tag-blue" style="margin-left:4px">added</span></li>
+            <li><span class="q-dot q-extended" style="background:#2c6ecb"></span><strong style="color:#2c6ecb">How do bristles perform after 2 years of use?</strong> <span class="tag tag-blue" style="margin-left:4px">added</span></li>
+          </ul>
+          <div class="pool-legend">
+            <span><span class="q-dot q-used" style="display:inline-block;margin-right:2px"></span>used</span>
+            <span><span class="q-dot q-base" style="display:inline-block;margin-right:2px"></span>available (hardcoded)</span>
+            <span><span class="q-dot q-extended" style="display:inline-block;margin-right:2px;background:#2c6ecb"></span>user-added</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- qa-lashes CRITICAL -->
+      <div class="pool-card">
+        <div class="pool-header">
+          <div>
+            <span class="pool-header-name">qa-lashes</span>
+          </div>
+          <span class="runway runway-critical">🔴 Critical</span>
+        </div>
+        <div class="pool-body">
+          <div class="pool-stats">
+            <span>📦 <b>5</b> hardcoded</span>
+            <span>➕ <b>0</b> user-added</span>
+            <span>✅ <b>3</b> published</span>
+            <span>⏳ <b>2</b> remaining</span>
+          </div>
+          <ul class="q-list" style="margin-top:10px">
+            <li><span class="q-dot q-used"></span><span style="color:#aaa;text-decoration:line-through">Is the knot on false lashes visible?</span></li>
+            <li><span class="q-dot q-used"></span><span style="color:#aaa;text-decoration:line-through">How thin is the lash fiber — does it look natural?</span></li>
+            <li><span class="q-dot q-used"></span><span style="color:#aaa;text-decoration:line-through">Is it easy to remove false lashes from tray?</span></li>
+            <li><span class="q-dot q-base"></span>C curl or D curl — which is better for hooded eyes?</li>
+            <li><span class="q-dot q-base"></span>Is 12D lash density sparse, or is 20D needed?</li>
+          </ul>
+          <div class="callout callout-warning" style="margin-top:10px;font-size:12px">
+            ⚠️ Only 2 questions left — articles will repeat after 2 more QA weeks. Add questions via the Content Pool Manager.
+          </div>
+        </div>
+      </div>
+
+      <!-- qa-eyeshadow LOW -->
+      <div class="pool-card">
+        <div class="pool-header">
+          <div>
+            <span class="pool-header-name">qa-eyeshadow</span>
+          </div>
+          <span class="runway runway-good">🟢 Good</span>
+        </div>
+        <div class="pool-body">
+          <div class="pool-stats">
+            <span>📦 <b>29</b> hardcoded</span>
+            <span>➕ <b>0</b> user-added</span>
+            <span>✅ <b>4</b> published</span>
+            <span>⏳ <b>25</b> remaining</span>
+          </div>
+          <ul class="q-list" style="margin-top:10px">
+            <li><span class="q-dot q-used"></span><span style="color:#aaa;text-decoration:line-through">Do eyeshadows dust when picked up with a brush?</span></li>
+            <li><span class="q-dot q-base"></span>Do eyeshadows crease in the eyelid fold after 6h?</li>
+            <li><span class="q-dot q-base"></span>Are eyeshadow pans refillable?</li>
+            <li><span class="q-dot q-base"></span>How does ENCANTO compare to Viseart texture?</li>
+            <li><span class="q-dot q-base"></span>Do dark shades patch when applied?</li>
+            <li style="color:#8c9196;font-style:italic;font-size:11px"><span class="q-dot" style="background:transparent"></span>+ 20 more questions…</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- qa-brow-gel LOW -->
+      <div class="pool-card">
+        <div class="pool-header">
+          <div>
+            <span class="pool-header-name">qa-brow-gel</span>
+          </div>
+          <span class="runway runway-low">🟡 Low</span>
+        </div>
+        <div class="pool-body">
+          <div class="pool-stats">
+            <span>📦 <b>9</b> hardcoded</span>
+            <span>➕ <b>1</b> user-added</span>
+            <span>✅ <b>3</b> published</span>
+            <span>⏳ <b>7</b> remaining</span>
+          </div>
+          <ul class="q-list" style="margin-top:10px">
+            <li><span class="q-dot q-used"></span><span style="color:#aaa;text-decoration:line-through">Does brow gel leave white residue?</span></li>
+            <li><span class="q-dot q-base"></span>Can brow gel handle thick, coarse brow hairs?</li>
+            <li><span class="q-dot q-base"></span>How long does brow gel take to dry completely?</li>
+            <li><span class="q-dot q-base"></span>Do brows feel sticky after brow gel sets?</li>
+            <li><span class="q-dot q-extended" style="background:#2c6ecb"></span><strong style="color:#2c6ecb">Is brow gel waterproof for humid climates?</strong> <span class="tag tag-blue" style="margin-left:4px">added</span></li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ③ FASHION WEEK CATEGORIES -->
+  <div class="section">
+    <div class="section-title">
+      <h2>③ Fashion Week Categories <span class="badge badge-fashion">Odd weeks</span></h2>
+    </div>
+
+    <p style="color:#6d7175;margin-bottom:16px;line-height:1.6">A Fashion week also publishes <strong>7 articles</strong> using category <em>templates</em>. Unlike QA pools (which use specific questions), Fashion categories define a <em>format</em> and a <em>title pattern</em> — the AI fills in the blanks freshly each week.</p>
+
+    <div class="fashion-grid">
+      <div class="fashion-card"><div class="fc-name">seasonal-trends <span class="fc-format">listicle</span></div><div class="fc-pattern">"Top X Professional Makeup Tool Trends for [Month Year]"</div></div>
+      <div class="fashion-card"><div class="fc-name">brand-comparison <span class="fc-format">comparison</span></div><div class="fc-pattern">"[Brand A] vs [Brand B] Professional Brushes: Which Is Worth It?"</div></div>
+      <div class="fashion-card"><div class="fc-name">look-guide <span class="fc-format">listicle</span></div><div class="fc-pattern">"The Complete Makeup Kit for [Occasion]: Tools & Techniques"</div></div>
+      <div class="fashion-card"><div class="fc-name">care-and-technique <span class="fc-format">evergreen-guide</span></div><div class="fc-pattern">"How to [Professional Technique or Care Topic]: Pro MUA Guide"</div></div>
+      <div class="fashion-card"><div class="fc-name">shopping-picks <span class="fc-format">listicle</span></div><div class="fc-pattern">"Must-Have Professional Makeup Tools for [Month Year]"</div></div>
+      <div class="fashion-card"><div class="fc-name">tool-comparison <span class="fc-format">comparison</span></div><div class="fc-pattern">"[Tool A] vs [Tool B]: What Pro MUAs Actually Choose"</div></div>
+      <div class="fashion-card"><div class="fc-name">makeup-how-to <span class="fc-format">technical</span></div><div class="fc-pattern">"How to [Specific Makeup Technique]: Step-by-Step for MUAs"</div></div>
+      <div class="fashion-card extended"><div class="fc-name">pro-kit-essentials <span class="fc-format extended">evergreen-guide</span></div><div class="fc-pattern">"The Essential Pro MUA Kit for [Event Type]: [Year] Edition"</div><div style="margin-top:6px"><span class="tag tag-blue">user-added</span></div></div>
+    </div>
+
+    <div class="rotation-box">
+      <h3>Rotation Logic — when more than 7 categories exist</h3>
+      <p style="font-size:12px;color:#7c5700;margin-bottom:8px">With 8 categories, no single fashion week can use all 8. The planner picks a different 7 each time, rotating through the pool.</p>
+      <div style="font-size:12px;color:#7c5700">
+        <div class="rotation-row">
+          <strong>Fashion Week 1 (ISO w1):</strong>
+          <div class="rotation-row" style="margin:0">
+            <span class="rot-chip rot-active">seasonal-trends</span>
+            <span class="rot-chip rot-active">brand-comparison</span>
+            <span class="rot-chip rot-active">look-guide</span>
+            <span class="rot-chip rot-active">care-and-technique</span>
+            <span class="rot-chip rot-active">shopping-picks</span>
+            <span class="rot-chip rot-active">tool-comparison</span>
+            <span class="rot-chip rot-active">makeup-how-to</span>
+            <span class="rot-chip rot-inactive">pro-kit-essentials</span>
+          </div>
+        </div>
+        <div class="rotation-row" style="margin-top:6px">
+          <strong>Fashion Week 2 (ISO w3):</strong>
+          <div class="rotation-row" style="margin:0">
+            <span class="rot-chip rot-inactive">seasonal-trends</span>
+            <span class="rot-chip rot-active">brand-comparison</span>
+            <span class="rot-chip rot-active">look-guide</span>
+            <span class="rot-chip rot-active">care-and-technique</span>
+            <span class="rot-chip rot-active">shopping-picks</span>
+            <span class="rot-chip rot-active">tool-comparison</span>
+            <span class="rot-chip rot-active">makeup-how-to</span>
+            <span class="rot-chip rot-active">pro-kit-essentials</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ④ FULL FLOW -->
+  <div class="section">
+    <div class="section-title">
+      <h2>④ Full Weekly Flow: Monday → Published Article</h2>
+    </div>
+
+    <div class="flow">
+
+      <div class="flow-row">
+        <div class="flow-node trigger">
+          <div class="fn-title" style="color:#a0c4ff">Monday 09:00 UTC</div>
+          <div class="fn-main">Cron fires</div>
+          <div class="fn-sub" style="color:#a0a8c0">POST /api/cron/weekly<br>node-cron on Fly.io</div>
+        </div>
+      </div>
+
+      <div class="flow-connector">↓</div>
+
+      <div class="flow-row">
+        <div class="flow-node">
+          <div class="fn-title">contentPlanner.server.ts</div>
+          <div class="fn-main">generateWeeklyPlan()</div>
+          <div class="fn-sub">Checks ISO week number → decides <span class="badge badge-fashion">FASHION</span> or <span class="badge badge-qa">QA</span></div>
+        </div>
+      </div>
+
+      <div class="flow-connector">↓</div>
+
+      <div class="flow-branch">
+        <div class="flow-node" style="background:#fff4e5;border-color:#f9c584">
+          <div class="fn-title" style="color:#b54708">If FASHION week</div>
+          <div class="fn-main" style="font-size:13px">getAllFashionCategories()</div>
+          <ul class="step-list">
+            <li><span class="step-num">1</span>Get 7 built-in + N user-added categories</li>
+            <li><span class="step-num">2</span>If total ≤7: use all 7</li>
+            <li><span class="step-num">3</span>If total &gt;7: rotate — pick starting index from week number</li>
+            <li><span class="step-num">4</span>For each category: GPT fills the title pattern with real specifics</li>
+          </ul>
+        </div>
+        <div class="flow-node" style="background:#e8f5e9;border-color:#95d5a6">
+          <div class="fn-title" style="color:#1b7340">If QA week</div>
+          <div class="fn-main" style="font-size:13px">getFullQAPool() × 7</div>
+          <ul class="step-list">
+            <li><span class="step-num">1</span>For each of 7 categories: merge base pool + user-added questions</li>
+            <li><span class="step-num">2</span>Filter out already-published topics (deduplication)</li>
+            <li><span class="step-num">3</span>GPT picks 1 question &amp; rewrites it as an SEO article title</li>
+            <li><span class="step-num">4</span>Retry if AI returns a duplicate or placeholder</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="flow-connector">↓</div>
+
+      <div class="flow-row">
+        <div class="flow-node db">
+          <div class="fn-title" style="color:#f57f17">PostgreSQL via Prisma</div>
+          <div class="fn-main">blogContentPlan.createMany() — 7 rows</div>
+          <div class="fn-sub">
+            Each row: shop, weekStart, dayIndex, scheduledDate, topic, category, contentFormat, targetWordCount, status="planned"
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-connector">↓ (each day 10:00 UTC)</div>
+
+      <div class="flow-row">
+        <div class="flow-node trigger">
+          <div class="fn-title" style="color:#a0c4ff">Daily 10:00 UTC</div>
+          <div class="fn-main">Cron fires</div>
+          <div class="fn-sub" style="color:#a0a8c0">POST /api/cron/daily → publishPlanItem()</div>
+        </div>
+      </div>
+
+      <div class="flow-connector">↓</div>
+
+      <div class="flow-row">
+        <div class="flow-node openai">
+          <div class="fn-title" style="color:#1b7340">articleWriter.server.ts — 5 OpenAI calls</div>
+          <div class="fn-main">Full article pipeline</div>
+          <ul class="step-list" style="margin-top:8px">
+            <li><span class="step-num">1</span><strong>enrichKeywords()</strong> — generates 8–12 SEO keywords</li>
+            <li><span class="step-num">2</span><strong>researchTopic()</strong> — 250–350 word expert brief (GPT-4o)</li>
+            <li><span class="step-num">3</span><strong>generateArticleBody()</strong> — 1800–2200 word HTML article (GPT-4o, maxTokens 5500)</li>
+            <li><span class="step-num">4</span><strong>generateArticleMetadata()</strong> — title, metaDescription, tags, excerpt (JSON mode)</li>
+            <li><span class="step-num">5</span><strong>publishArticleToShopify()</strong> — articleCreate mutation via Admin GraphQL</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="flow-connector">↓</div>
+
+      <div class="flow-row">
+        <div class="flow-node publish">
+          <div class="fn-title" style="color:#ad1457">Result</div>
+          <div class="fn-main">Article live on encantoshop.es</div>
+          <div class="fn-sub">Row updated: status "planned" → "published", articleId &amp; articleUrl saved. Runway counter decrements by 1.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ⑤ CONCRETE EXAMPLE -->
+  <div class="section">
+    <div class="section-title">
+      <h2>⑤ Concrete Example: QA Week, Wednesday</h2>
+    </div>
+
+    <div class="example-flow">
+      <div class="ex-card input">
+        <div class="ex-label green">INPUT — qa-brushes pool</div>
+        <div class="ex-content">
+          <strong>Available questions (26 hardcoded + 2 user-added = 28 total, 6 already used = 22 left):</strong><br>
+          1. What wood are CTR professional brush handles made from?<br>
+          2. How should professional makeup brushes be cared for?<br>
+          3. Which CTR brushes are suitable for cream textures?<br>
+          4. Does shiny bristle mean the brush is natural hair or synthetic?<br>
+          <span style="color:#999">… 18 more questions</span><br>
+          25. <strong style="color:#2c6ecb">Can CTR brushes handle wet application?</strong> ← user-added<br>
+          26. <strong style="color:#2c6ecb">How do bristles perform after 2 years of use?</strong> ← user-added
+        </div>
+      </div>
+
+      <div class="ex-arrow">↓</div>
+
+      <div class="ex-card ai">
+        <div class="ex-label blue">GPT-4o call — generateQATopic()</div>
+        <div class="ex-content">
+          <strong>Prompt excerpt:</strong><br>
+          <code>"Pick ONE question from [22 available]. Rewrite as SEO blog title, 50–70 chars, no brand name. Already used: [6 past titles]."</code><br><br>
+          <strong>GPT picks question #3:</strong> <em>"Which CTR brushes are suitable for cream textures?"</em><br>
+          <strong>Rewrites it as:</strong> <code>{ "topic": "Best Brushes for Cream Foundation: What MUAs Actually Use" }</code>
+        </div>
+      </div>
+
+      <div class="ex-arrow">↓</div>
+
+      <div class="ex-card output">
+        <div class="ex-label orange">DATABASE ROW — BlogContentPlan</div>
+        <div class="ex-content">
+          <code>topic:</code> "Best Brushes for Cream Foundation: What MUAs Actually Use"<br>
+          <code>category:</code> "qa-brushes"<br>
+          <code>scheduledDate:</code> 2026-06-25 (Wednesday)<br>
+          <code>status:</code> "planned"<br>
+          <code>contentFormat:</code> "qa-deepdive"<br>
+          <code>targetWordCount:</code> 2000
+        </div>
+      </div>
+
+      <div class="ex-arrow">↓ Wednesday 10:00 UTC</div>
+
+      <div class="ex-card pub">
+        <div class="ex-label pink">PUBLISHED ARTICLE</div>
+        <div class="ex-content">
+          <strong>URL:</strong> encantoshop.es/blogs/noticias/best-brushes-cream-foundation-muas<br>
+          <strong>Title:</strong> Best Brushes for Cream Foundation: What MUAs Actually Use | ENCANTO<br>
+          <strong>Word count:</strong> ~2000 words<br>
+          <strong>Status row updated:</strong> "planned" → "published", articleId + articleUrl saved<br>
+          <strong>Pool runway:</strong> qa-brushes: 22 → 21 remaining
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑥ ADMIN UI -->
+  <div class="section">
+    <div class="section-title">
+      <h2>⑥ Admin UI — Content Pool Manager</h2>
+    </div>
+
+    <div class="mockup">
+      <div class="mockup-bar">
+        <div class="mockup-dot" style="background:#ff5f57"></div>
+        <div class="mockup-dot" style="background:#ffbd2e"></div>
+        <div class="mockup-dot" style="background:#28c840"></div>
+        <div class="mockup-url">admin.shopify.com/.../apps/blog-generate/app/blog/pools</div>
+      </div>
+      <div class="mockup-body">
+        <div class="mockup-heading">Content Pool Manager</div>
+
+        <div class="mock-section-title">QA Question Pools</div>
+
+        <!-- qa-brushes row -->
+        <div class="mock-pool-row">
+          <div class="mock-pool-top">
+            <div>
+              <span class="mock-pool-name">qa-brushes</span>
+              <span style="font-size:11px;color:#6d7175;margin-left:10px">28 questions total · 6 published · 22 remaining</span>
+              <span style="font-size:11px;margin-left:6px">🟢 Good</span>
+            </div>
+            <span class="mock-btn">Suggest 10 more</span>
+          </div>
+          <div class="mock-pool-meta">26 hardcoded · 2 added by you</div>
+          <div>
+            <div class="mock-q-chip user-added">Can CTR brushes handle wet application? <span class="chip-x">✕</span></div>
+            <div class="mock-q-chip user-added">How do bristles perform after 2 years? <span class="chip-x">✕</span></div>
+          </div>
+
+          <!-- AI suggestions area -->
+          <div class="mock-suggest-area">
+            <div class="mock-suggest-label">AI Suggestions — click ✓ to add, ✕ to skip:</div>
+            <div class="mock-suggest-row">
+              <span>Do CTR brushes resist brow dye staining after multiple uses?</span>
+              <div class="mock-suggest-actions">
+                <span class="mock-check">✓</span>
+                <span class="mock-cross">✕</span>
+              </div>
+            </div>
+            <div class="mock-suggest-row">
+              <span>Which CTR brush density works best for mature or textured skin?</span>
+              <div class="mock-suggest-actions">
+                <span class="mock-check">✓</span>
+                <span class="mock-cross">✕</span>
+              </div>
+            </div>
+            <div class="mock-suggest-row">
+              <span>Can CTR foundation brushes be used for body contouring?</span>
+              <div class="mock-suggest-actions">
+                <span class="mock-check">✓</span>
+                <span class="mock-cross">✕</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="mock-input-row">
+            <input class="mock-input" placeholder="Add a question manually…" />
+            <span class="mock-btn">Add</span>
+          </div>
+        </div>
+
+        <!-- qa-lashes row CRITICAL -->
+        <div class="mock-pool-row" style="border-color:#f48fb1;background:#fff8f8">
+          <div class="mock-pool-top">
+            <div>
+              <span class="mock-pool-name">qa-lashes</span>
+              <span style="font-size:11px;color:#6d7175;margin-left:10px">5 questions total · 3 published · 2 remaining</span>
+              <span style="font-size:11px;margin-left:6px">🔴 Critical</span>
+            </div>
+            <span class="mock-btn">Suggest 10 more</span>
+          </div>
+          <div class="mock-pool-meta">5 hardcoded · 0 added by you</div>
+          <div style="font-size:12px;color:#c62828;background:#fdecea;border-radius:4px;padding:6px 10px;margin-top:4px">
+            ⚠️ Only 2 questions left before topics repeat. Click "Suggest 10 more" or add manually.
+          </div>
+          <div class="mock-input-row" style="margin-top:8px">
+            <input class="mock-input" placeholder="Add a question manually…" />
+            <span class="mock-btn">Add</span>
+          </div>
+        </div>
+
+        <div class="mock-section-title" style="margin-top:20px">Fashion Week Categories</div>
+
+        <div style="font-size:12px;font-weight:700;color:#6d7175;margin-bottom:6px">BUILT-IN CATEGORIES (7)</div>
+        <div class="mock-q-chip" style="margin:2px;padding:5px 10px">seasonal-trends <span style="color:#999;margin-left:4px">(listicle)</span></div>
+        <div class="mock-q-chip" style="margin:2px;padding:5px 10px">brand-comparison <span style="color:#999;margin-left:4px">(comparison)</span></div>
+        <div class="mock-q-chip" style="margin:2px;padding:5px 10px">look-guide <span style="color:#999;margin-left:4px">(listicle)</span></div>
+        <div class="mock-q-chip" style="margin:2px;padding:5px 10px">care-and-technique <span style="color:#999;margin-left:4px">(evergreen-guide)</span></div>
+        <div class="mock-q-chip" style="margin:2px;padding:5px 10px">shopping-picks <span style="color:#999;margin-left:4px">(listicle)</span></div>
+        <div class="mock-q-chip" style="margin:2px;padding:5px 10px">tool-comparison <span style="color:#999;margin-left:4px">(comparison)</span></div>
+        <div class="mock-q-chip" style="margin:2px;padding:5px 10px">makeup-how-to <span style="color:#999;margin-left:4px">(technical)</span></div>
+
+        <div style="font-size:12px;font-weight:700;color:#2c6ecb;margin:12px 0 6px">YOUR CATEGORIES (1)</div>
+        <div class="mock-q-chip user-added" style="margin:2px;padding:5px 10px">pro-kit-essentials <span style="color:#6d7175;margin-left:4px">(evergreen-guide)</span> <span class="chip-x">✕</span></div>
+
+        <div style="margin-top:16px">
+          <span class="mock-btn">Suggest a new category</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑦ DATA STORAGE -->
+  <div class="section">
+    <div class="section-title">
+      <h2>⑦ Where Data Lives</h2>
+    </div>
+    <div class="two-col">
+      <div>
+        <h3 style="margin-bottom:10px">Source code (hardcoded)</h3>
+        <div class="rule-box">
+          <code>contentPlanner.server.ts</code><br><br>
+          <strong>QA_CATEGORIES[]</strong> — array of 7 objects, each with:<br>
+          &nbsp;• <code>name</code> ("qa-brushes")<br>
+          &nbsp;• <code>questionPool: string[]</code> (the base questions)<br>
+          &nbsp;• <code>format</code>, <code>titlePattern</code>, <code>targetWordCount</code><br><br>
+          <strong>FASHION_CATEGORIES[]</strong> — array of 7 objects, each with:<br>
+          &nbsp;• <code>name</code>, <code>format</code>, <code>titlePattern</code>, <code>targetWordCount</code>
+        </div>
+      </div>
+      <div>
+        <h3 style="margin-bottom:10px">Database (user-extended)</h3>
+        <div class="rule-box">
+          <code>BlogSettings</code> row (one per shop)<br><br>
+          <strong>extendedQAQuestions: Json</strong><br>
+          &nbsp;<code>{</code><br>
+          &nbsp;&nbsp;<code>"qa-brushes": ["Q1", "Q2"],</code><br>
+          &nbsp;&nbsp;<code>"qa-lashes": [],</code><br>
+          &nbsp;&nbsp;<code>"qa-brow-gel": ["Q1"]</code><br>
+          &nbsp;<code>}</code><br><br>
+          <strong>extendedFashionCategories: Json</strong><br>
+          &nbsp;<code>[{ name, format, titlePattern, targetWordCount }]</code>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px" class="callout callout-tip">
+      <strong>Key design insight:</strong> The hardcoded pools are the "seed". User additions are appended from the database on every planning run via <code>getFullQAPool(settings, categoryName)</code>. Neither changes the source code — the DB extension is purely additive.
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
