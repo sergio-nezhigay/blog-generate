@@ -7,6 +7,7 @@ import {
   generateWeeklyPlan,
   getWeekStart,
   weekAlreadyPlanned,
+  type PlanResult,
 } from "../services/blog/contentPlanner.server";
 import { publishPlanItem } from "../services/blog/articleWriter.server";
 
@@ -44,6 +45,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const existingTitles = existingArticles.map((a) => a.title);
     await generateWeeklyPlan(session.shop, settings, existingTitles);
     return { success: true, intent: "generatePlan" };
+  }
+
+  if (intent === "dryRun") {
+    const settings = await db.blogSettings.findUnique({
+      where: { shop: session.shop },
+    });
+    if (!settings?.blogId) {
+      return { error: "Configure a blog in Settings before running a simulation." };
+    }
+    const { articles: existingArticles } = await getShopifyArticles(admin, settings.blogId);
+    const existingTitles = existingArticles.map((a) => a.title);
+    const result: PlanResult = await generateWeeklyPlan(session.shop, settings, existingTitles, { dryRun: true });
+    return { success: true, intent: "dryRun", dryRunResult: result };
   }
 
   if (intent === "publishNow") {
@@ -87,6 +101,14 @@ export default function BlogPlan() {
 
   const isGenerating =
     fetcher.state !== "idle" && fetcher.formData?.get("intent") === "generatePlan";
+
+  const isSimulating =
+    fetcher.state !== "idle" && fetcher.formData?.get("intent") === "dryRun";
+
+  const dryRunResult =
+    fetcher.data && "dryRunResult" in fetcher.data
+      ? (fetcher.data as { dryRunResult: PlanResult }).dryRunResult
+      : null;
 
   const publishingPlanId =
     fetcher.state !== "idle" && fetcher.formData?.get("intent") === "publishNow"
@@ -147,9 +169,42 @@ export default function BlogPlan() {
           >
             {planExists ? "Plan already generated" : "Generate Weekly Plan"}
           </s-button>
+          <s-button
+            variant="secondary"
+            onClick={() => fetcher.submit({ intent: "dryRun" }, { method: "post" })}
+            {...(isSimulating ? { loading: true } : {})}
+          >
+            Simulate next week
+          </s-button>
           <s-link href="/app/blog/settings">Settings</s-link>
         </s-stack>
       </s-section>
+
+      {dryRunResult && (
+        <s-section heading={`Simulation — ${dryRunResult.weekType === "fashion" ? "Fashion" : "Q&A"} week`}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={tableStyle}>
+              <thead>
+                <tr>
+                  {["Day", "Category", "Topic (not saved)"].map((h, i) => (
+                    <th key={i} style={thStyle}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {dryRunResult.topics.map((t) => (
+                  <tr key={t.dayIndex} style={trStyle}>
+                    <td style={tdStyle}>{DAY_NAMES[t.dayIndex] ?? t.dayIndex}</td>
+                    <td style={tdStyle}><span style={categoryStyle}>{t.category}</span></td>
+                    <td style={tdStyle}>{t.topic}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p style={noteStyle}>Simulation only — no articles saved or scheduled.</p>
+        </s-section>
+      )}
 
       {plans.length === 0 ? (
         <s-section>

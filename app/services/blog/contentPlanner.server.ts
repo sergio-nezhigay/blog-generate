@@ -1,6 +1,7 @@
 import db from "../../db.server";
 import { chatCompleteJSON } from "./openai.server";
 import { isDuplicate } from "./deduplication.server";
+import { suggestQAQuestions } from "./poolSuggester.server";
 import type { BlogSettings } from "@prisma/client";
 
 export type WeekType = "fashion" | "qa";
@@ -480,16 +481,7 @@ async function generateTopicForCategory(
       const unused = cat.questionPool.find((q) => !isDuplicate(q, usedTitles));
       return unused ?? cat.questionPool[0];
     }
-    const fallbacks: Record<string, string> = {
-      "seasonal-trends": "Top Professional Makeup Tool Trends for Summer 2026",
-      "brand-comparison": "ENCANTO vs Sigma Brushes: Which Is Worth It in 2026?",
-      "look-guide": "The Complete Bridal Makeup Kit: Tools & Techniques",
-      "care-and-technique": "How to Deep-Clean Makeup Brushes: Pro MUA Guide",
-      "shopping-picks": "Must-Have Professional Makeup Tools for July 2026",
-      "tool-comparison": "Goat vs Synthetic Brushes: What Pro MUAs Actually Choose",
-      "makeup-how-to": "How to Blend Eyeshadows Seamlessly: Step-by-Step for MUAs",
-    };
-    return fallbacks[cat.name] ?? cat.titlePattern;
+    return generateFashionFallback(cat, brandName, usedTitles);
   }
 
   if (cat.questionPool) {
@@ -542,7 +534,10 @@ async function generateQATopic(
   const available = cat.questionPool!.filter((q) => !isDuplicate(q, usedTitles));
 
   if (available.length === 0) {
-    return `${cat.questionPool![0]} — ${brandName} Professional Guide`;
+    const fresh = await suggestQAQuestions(cat.name, cat.questionPool!, brandName);
+    const novel = fresh.find((q) => !isDuplicate(q, usedTitles));
+    if (novel) return novel;
+    return cat.questionPool![0];
   }
 
   const productName = cat.name.replace("qa-", "").replace("-", " ");
@@ -581,8 +576,49 @@ Respond with JSON: { "topic": "Article Title Here" }`,
   const topic = result.topic?.trim() ?? "";
 
   if (!topic || isDuplicate(topic, usedTitles)) {
+    if (attempt >= 4) return available[0];
     return generateQATopic(cat, brandName, usedTitles, attempt + 1);
   }
 
+  return topic;
+}
+
+async function generateFashionFallback(
+  cat: ContentCategory,
+  brandName: string,
+  usedTitles: string[],
+): Promise<string> {
+  const monthYear = new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+  const result = await chatCompleteJSON<{ topic: string }>(
+    [
+      {
+        role: "system",
+        content: `You are a content strategist for ${brandName}, a premium professional makeup tools brand. ${ICP_FILTER}`,
+      },
+      {
+        role: "user",
+        content: `Generate ONE blog article title for this content category.
+
+Category: ${cat.name}
+Format: ${cat.format}
+Title pattern to follow: ${cat.titlePattern}
+Current date: ${monthYear}
+
+Requirements:
+- 50–70 characters
+- Specific, not generic — name the actual tool, technique, or brand
+- Relevant to professional makeup artists using premium tools
+- Do NOT use "[" or "]" placeholder syntax in the title
+- Avoid these recently used topics: ${usedTitles.slice(0, 8).join(" | ")}
+
+Respond with JSON: { "topic": "Title Here" }`,
+      },
+    ],
+    { temperature: 0.9, maxTokens: 200 },
+  );
+
+  const topic = result.topic?.trim() ?? "";
+  if (!topic || topic.includes("[")) return cat.titlePattern;
   return topic;
 }
