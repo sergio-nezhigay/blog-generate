@@ -45,7 +45,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
 
       const { admin } = await unauthenticated.admin(settings.shop);
-      const existingArticles = await getShopifyArticles(admin, settings.blogId);
+      const { articles: existingArticles } = await getShopifyArticles(admin, settings.blogId);
       const existingTitles = existingArticles.map((a) => a.title);
 
       const result = await generateWeeklyPlan(settings.shop, settings, existingTitles, {

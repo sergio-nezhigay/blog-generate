@@ -5,6 +5,12 @@ import { getShopifyArticles, publishArticleToShopify, uploadImageToShopifyCDN, s
 import { getOpenAI } from "./openai.server";
 import type { ShopifyArticle } from "./shopifyBlog.server";
 
+export interface ProductLink {
+  url: string;
+  label: string;
+  keywords: string;
+}
+
 type AdminGraphQL = (query: string, options?: { variables?: Record<string, unknown> }) => Promise<Response>;
 
 const ICP_CONTEXT = `
@@ -69,19 +75,63 @@ This will be used to write the full article. Be specific and substantive.`,
   );
 }
 
+export function selectRelevantArticles(
+  topic: string,
+  keywords: string[],
+  articles: ShopifyArticle[],
+  maxResults = 6,
+): ShopifyArticle[] {
+  const normalize = (s: string) =>
+    s.toLowerCase()
+      .replace(/[áàâä]/g, "a").replace(/[éèêë]/g, "e")
+      .replace(/[íìîï]/g, "i").replace(/[óòôö]/g, "o")
+      .replace(/[úùûü]/g, "u").replace(/ñ/g, "n").replace(/ç/g, "c");
+
+  const searchWords = [
+    ...topic.split(/\s+/),
+    ...keywords.flatMap((k) => k.split(/\s+/)),
+  ].map(normalize).filter((w) => w.length > 3);
+  const unique = [...new Set(searchWords)];
+
+  const scored = articles.map((article) => {
+    const titleWords = article.title.split(/\s+/).map(normalize);
+    const score = unique.filter((term) =>
+      titleWords.some((tw) => tw.includes(term) || term.includes(tw))
+    ).length;
+    return { article, score };
+  });
+
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    const da = a.article.publishedAt ? new Date(a.article.publishedAt).getTime() : 0;
+    const db_ = b.article.publishedAt ? new Date(b.article.publishedAt).getTime() : 0;
+    return db_ - da;
+  });
+
+  return scored.slice(0, maxResults).map((s) => s.article);
+}
+
 async function generateArticleBody(
   topic: string,
   category: string,
   keywords: string[],
   research: string,
-  existingArticles: ShopifyArticle[],
+  linkCandidates: ShopifyArticle[],
+  blogHandle: string,
+  productLinks: ProductLink[],
   settings: BlogSettings,
 ): Promise<string> {
-  const internalLinksContext = existingArticles.length > 0
-    ? existingArticles.slice(0, 15)
-        .map((a) => `- "${a.title}" → /blogs/news/${a.handle}`)
+  const articleLinksBlock = linkCandidates.length > 0
+    ? linkCandidates
+        .map((a) => `- "${a.title}" → /blogs/${blogHandle}/${a.handle}`)
         .join("\n")
-    : "No existing articles yet — omit internal links.";
+    : "No existing articles yet — omit internal article links.";
+
+  const productLinksBlock = productLinks.length > 0
+    ? productLinks
+        .map((p) => `- "${p.label}" → ${p.url} (relevant keywords: ${p.keywords})`)
+        .join("\n")
+    : "";
 
   return chatComplete(
     [
@@ -98,11 +148,13 @@ CRITICAL HTML RULES:
 - Use <h3> for subsections, <p>, <ul>, <ol>, <strong>, <em> for content
 - All h2 id attributes must be lowercase, hyphen-separated
 
-INTERNAL LINKS (use 3-5 if relevant):
-${internalLinksContext}
+INTERNAL ARTICLE LINKS — you MUST include exactly 2–4 of these links somewhere in the article body paragraphs. This is required, not optional:
+${articleLinksBlock}
+Anchor text: write a short natural phrase (3–6 words) that fits the sentence — do NOT copy the full title, do NOT repeat the same phrase twice.
+${productLinksBlock.length > 0 ? `\nPRODUCT / COLLECTION LINKS — use 1–2 only when directly relevant to the paragraph:\n${productLinksBlock}\nAnchor text: use the label or a close natural variation.` : ""}
 
 CTA LINK: ${settings.ctaUrl}
-COLLECTIONS LINK (use max 2 times): ${settings.servicesUrl}`,
+COLLECTIONS LINK (use max 1 time): ${settings.servicesUrl}`,
       },
       {
         role: "user",
@@ -304,7 +356,10 @@ export async function publishPlanItem(
     const research = await researchTopic(plan.topic, keywords);
 
     // 3. Existing articles for internal links
-    const existingArticles = await getShopifyArticles(admin, settings.blogId);
+    const { articles: existingArticles, blogHandle } = await getShopifyArticles(admin, settings.blogId);
+    const linkCandidates = selectRelevantArticles(plan.topic, keywords, existingArticles);
+    const productLinks = (settings.productLinks as unknown as ProductLink[]) ?? [];
+    console.log(`[internal-links] blog: /blogs/${blogHandle}/ | fetched: ${existingArticles.length} articles | candidates: ${linkCandidates.map((a) => `"${a.title}"`).join(", ") || "none"} | product links: ${productLinks.length}`);
 
     // 4. Article body (HTML)
     const bodyHtml = await generateArticleBody(
@@ -312,7 +367,9 @@ export async function publishPlanItem(
       plan.category,
       keywords,
       research,
-      existingArticles,
+      linkCandidates,
+      blogHandle,
+      productLinks,
       settings,
     );
 
@@ -354,6 +411,10 @@ export async function publishPlanItem(
     if (faqItems.length > 0) {
       finalBodyHtml += buildFaqPageSchema(faqItems);
     }
+
+    const internalLinkCount = (finalBodyHtml.match(/<a\s+href="\/blogs\//g) ?? []).length;
+    const productLinkCount = (finalBodyHtml.match(/<a\s+href="\/collections\/|<a\s+href="\/pages\//g) ?? []).length;
+    console.log(`[internal-links] Links in published HTML — internal articles: ${internalLinkCount}, products/pages: ${productLinkCount}`);
 
     // 9. Publish to Shopify
     const displayTitle = (meta.title && meta.title.trim()) || plan.topic;

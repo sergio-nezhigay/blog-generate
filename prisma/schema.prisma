@@ -67,6 +67,7 @@ model BlogSettings {
   testMode    Boolean  @default(false)
   extendedQAQuestions       Json @default("{}")
   extendedFashionCategories Json @default("[]")
+  productLinks              Json @default("[]")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }

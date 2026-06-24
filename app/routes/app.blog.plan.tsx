@@ -8,7 +8,7 @@ import {
   getWeekStart,
   weekAlreadyPlanned,
 } from "../services/blog/contentPlanner.server";
-import { publishPlanItem } from "../services/blog/articleWriter.server";
+import { publishPlanItem, selectRelevantArticles, type ProductLink } from "../services/blog/articleWriter.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -40,10 +40,36 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     if (!settings?.blogId) {
       return { error: "Configure a blog in Settings before generating a plan." };
     }
-    const existingArticles = await getShopifyArticles(admin, settings.blogId);
+    const { articles: existingArticles } = await getShopifyArticles(admin, settings.blogId);
     const existingTitles = existingArticles.map((a) => a.title);
     await generateWeeklyPlan(session.shop, settings, existingTitles);
     return { success: true, intent: "generatePlan" };
+  }
+
+  if (intent === "previewLinks") {
+    const planId = parseInt(formData.get("planId") as string, 10);
+    if (!planId) return { error: "Missing planId" };
+    try {
+      const [plan, settings] = await Promise.all([
+        db.blogContentPlan.findUnique({ where: { id: planId } }),
+        db.blogSettings.findUnique({ where: { shop: session.shop } }),
+      ]);
+      if (!plan || !settings?.blogId) return { error: "Plan or settings not found" };
+      const { articles, blogHandle } = await getShopifyArticles(admin, settings.blogId);
+      const candidates = selectRelevantArticles(plan.topic, plan.keywords, articles);
+      const productLinks = (settings.productLinks as unknown as ProductLink[]) ?? [];
+      return {
+        success: true,
+        intent: "previewLinks",
+        planId,
+        topic: plan.topic,
+        blogHandle,
+        candidates: candidates.map((a) => ({ title: a.title, url: `/blogs/${blogHandle}/${a.handle}` })),
+        productLinks,
+      };
+    } catch (err) {
+      return { error: `Preview failed: ${err instanceof Error ? err.message : String(err)}`, intent: "previewLinks" };
+    }
   }
 
   if (intent === "publishNow") {
@@ -98,12 +124,34 @@ export default function BlogPlan() {
       ? Number(fetcher.formData.get("planId"))
       : null;
 
+  const previewingPlanId =
+    fetcher.state !== "idle" && fetcher.formData?.get("intent") === "previewLinks"
+      ? Number(fetcher.formData.get("planId"))
+      : null;
+
+  const previewResult =
+    fetcher.state === "idle" &&
+    fetcher.data &&
+    "success" in fetcher.data &&
+    "intent" in fetcher.data &&
+    fetcher.data.intent === "previewLinks"
+      ? (fetcher.data as {
+          intent: string; topic: string; blogHandle: string;
+          candidates: { title: string; url: string }[];
+          productLinks: ProductLink[];
+        })
+      : null;
+
   function submitPublish(planId: number) {
     fetcher.submit({ intent: "publishNow", planId: String(planId) }, { method: "post" });
   }
 
   function submitReset(planId: number) {
     fetcher.submit({ intent: "resetToPlan", planId: String(planId) }, { method: "post" });
+  }
+
+  function submitPreview(planId: number) {
+    fetcher.submit({ intent: "previewLinks", planId: String(planId) }, { method: "post" });
   }
 
   return (
@@ -121,6 +169,33 @@ export default function BlogPlan() {
       )}
       {fetcher.data && "success" in fetcher.data && fetcher.data.intent === "resetToPlan" && (
         <s-banner tone="info">Article reset to planned — ready to republish.</s-banner>
+      )}
+      {previewResult && (
+        <s-banner tone="info">
+          <strong>Link preview for: {previewResult.topic}</strong>
+          <div style={{ marginTop: "8px" }}>
+            <strong>Article candidates ({previewResult.candidates.length}):</strong>
+            {previewResult.candidates.length > 0 ? (
+              <ul style={{ margin: "4px 0 8px 16px", padding: 0 }}>
+                {previewResult.candidates.map((c) => (
+                  <li key={c.url} style={{ fontSize: "13px" }}>{c.title} → <code>{c.url}</code></li>
+                ))}
+              </ul>
+            ) : (
+              <span style={{ fontSize: "13px", marginLeft: "8px" }}>None (no existing articles)</span>
+            )}
+            {previewResult.productLinks.length > 0 && (
+              <>
+                <strong>Product/collection links ({previewResult.productLinks.length}):</strong>
+                <ul style={{ margin: "4px 0 0 16px", padding: 0 }}>
+                  {previewResult.productLinks.map((p) => (
+                    <li key={p.url} style={{ fontSize: "13px" }}>{p.label} → <code>{p.url}</code></li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        </s-banner>
       )}
       {settings?.testMode && (
         <s-banner tone="warning">
@@ -163,8 +238,8 @@ export default function BlogPlan() {
           <div style={{ overflowX: "auto" }}><table style={tableStyle}>
             <thead>
               <tr>
-                {["Date", "Day", "Category", "Topic", "Status", ""].map((h) => (
-                  <th key={h} style={thStyle}>
+                {["Date", "Day", "Category", "Topic", "Status", "", ""].map((h, i) => (
+                  <th key={i} style={thStyle}>
                     {h}
                   </th>
                 ))}
@@ -238,6 +313,16 @@ export default function BlogPlan() {
                           {resettingPlanId === plan.id ? "…" : "Reset"}
                         </button>
                       ) : null}
+                    </td>
+                    <td style={{ ...tdStyle, width: "90px" }}>
+                      <button
+                        onClick={() => submitPreview(plan.id)}
+                        disabled={previewingPlanId !== null && previewingPlanId !== plan.id}
+                        style={resetBtnStyle}
+                        title="Preview which articles would be selected as internal link candidates"
+                      >
+                        {previewingPlanId === plan.id ? "…" : "Links"}
+                      </button>
                     </td>
                   </tr>
                 );

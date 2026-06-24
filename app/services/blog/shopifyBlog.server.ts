@@ -155,6 +155,7 @@ export interface ShopifyArticle {
   id: string;
   title: string;
   handle: string;
+  publishedAt?: string;
 }
 
 export async function getShopifyBlogs(admin: { graphql: AdminGraphQL }): Promise<ShopifyBlog[]> {
@@ -175,24 +176,39 @@ export async function getShopifyBlogs(admin: { graphql: AdminGraphQL }): Promise
 export async function getShopifyArticles(
   admin: { graphql: AdminGraphQL },
   blogId: string,
-): Promise<ShopifyArticle[]> {
+): Promise<{ articles: ShopifyArticle[]; blogHandle: string }> {
   const response = await admin.graphql(`
     query GetArticles($blogId: ID!) {
       blog(id: $blogId) {
+        handle
         articles(first: 250) {
           nodes {
             id
             title
             handle
+            publishedAt
           }
         }
       }
     }
   `, { variables: { blogId } });
-  const { data } = await response.json() as {
-    data: { blog: { articles: { nodes: ShopifyArticle[] } } | null };
+  const json = await response.json() as {
+    data?: { blog: { handle: string; articles: { nodes: ShopifyArticle[] } } | null };
+    errors?: { message: string }[];
   };
-  return data.blog?.articles.nodes ?? [];
+  if (json.errors?.length) {
+    console.error("[getShopifyArticles] GraphQL errors:", json.errors.map((e) => e.message).join("; "));
+  }
+  const blog = json.data?.blog;
+  const articles = (blog?.articles.nodes ?? []).slice().sort((a, b) => {
+    const da = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
+    const db_ = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
+    return db_ - da;
+  });
+  return {
+    articles,
+    blogHandle: blog?.handle ?? "noticias",
+  };
 }
 
 export async function publishArticleToShopify(

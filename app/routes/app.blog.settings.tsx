@@ -4,6 +4,7 @@ import { useFetcher, useLoaderData } from "react-router";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { getShopifyBlogs } from "../services/blog/shopifyBlog.server";
+import type { ProductLink } from "../services/blog/articleWriter.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -24,12 +25,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     servicesUrl: string;
     active: boolean;
     testMode: boolean;
+    productLinks: ProductLink[];
   };
 
+  const data = { ...body, productLinks: body.productLinks as unknown as Parameters<typeof db.blogSettings.upsert>[0]["create"]["productLinks"] };
   await db.blogSettings.upsert({
     where: { shop: session.shop },
-    create: { shop: session.shop, ...body },
-    update: body,
+    create: { shop: session.shop, ...data },
+    update: data,
   });
 
   return { success: true };
@@ -46,6 +49,21 @@ export default function BlogSettings() {
   const [servicesUrl, setServicesUrl] = useState(settings?.servicesUrl ?? "/pages/collections/all");
   const [active, setActive] = useState(settings?.active ?? false);
   const [testMode, setTestMode] = useState(settings?.testMode ?? false);
+  const [productLinks, setProductLinks] = useState<ProductLink[]>(
+    (settings?.productLinks as unknown as ProductLink[]) ?? [],
+  );
+
+  function addProductLink() {
+    setProductLinks((prev) => [...prev, { url: "", label: "", keywords: "" }]);
+  }
+
+  function updateProductLink(index: number, field: keyof ProductLink, value: string) {
+    setProductLinks((prev) => prev.map((p, i) => i === index ? { ...p, [field]: value } : p));
+  }
+
+  function removeProductLink(index: number) {
+    setProductLinks((prev) => prev.filter((_, i) => i !== index));
+  }
 
   const isSubmitting = fetcher.state !== "idle";
   const saved = fetcher.state === "idle" && fetcher.data?.success;
@@ -59,7 +77,7 @@ export default function BlogSettings() {
 
   const handleSave = () => {
     fetcher.submit(
-      { blogId, blogTitle, brandName, ctaUrl, servicesUrl, active, testMode },
+      JSON.stringify({ blogId, blogTitle, brandName, ctaUrl, servicesUrl, active, testMode, productLinks }),
       { method: "POST", encType: "application/json" },
     );
   };
@@ -133,6 +151,54 @@ export default function BlogSettings() {
         </s-stack>
       </s-section>
 
+      <s-section heading="Product &amp; Collection Links">
+        <s-stack direction="block" gap="base">
+          <p style={{ fontSize: "13px", color: "#6d7175", margin: 0 }}>
+            Links to specific product pages or collections that the AI may insert when contextually relevant.
+            Each entry needs a URL, a display label, and comma-separated trigger keywords.
+          </p>
+          {productLinks.map((link, i) => (
+            <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: "8px", alignItems: "center" }}>
+              <input
+                type="text"
+                placeholder="/collections/brochas"
+                value={link.url}
+                onChange={(e) => updateProductLink(i, "url", e.target.value)}
+                style={inputStyle}
+              />
+              <input
+                type="text"
+                placeholder="brochas profesionales"
+                value={link.label}
+                onChange={(e) => updateProductLink(i, "label", e.target.value)}
+                style={inputStyle}
+              />
+              <input
+                type="text"
+                placeholder="brocha, pincel, brush"
+                value={link.keywords}
+                onChange={(e) => updateProductLink(i, "keywords", e.target.value)}
+                style={inputStyle}
+              />
+              <button
+                onClick={() => removeProductLink(i)}
+                style={{ ...resetBtnStyle, color: "#d72c0d", padding: "8px" }}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          {productLinks.length > 0 && (
+            <p style={{ fontSize: "12px", color: "#6d7175", margin: 0 }}>
+              URL · Label (anchor text) · Trigger keywords
+            </p>
+          )}
+          <div>
+            <button onClick={addProductLink} style={addLinkBtnStyle}>+ Add link</button>
+          </div>
+        </s-stack>
+      </s-section>
+
       <s-section heading="Automation">
         <s-stack direction="block" gap="base">
           <s-stack direction="inline" gap="base">
@@ -184,4 +250,23 @@ const inputStyle: React.CSSProperties = {
   border: "1px solid #c9cccf",
   fontSize: "14px",
   boxSizing: "border-box",
+};
+
+const addLinkBtnStyle: React.CSSProperties = {
+  background: "none",
+  border: "1px solid #c9cccf",
+  borderRadius: "6px",
+  padding: "6px 12px",
+  fontSize: "13px",
+  cursor: "pointer",
+  color: "#202223",
+};
+
+const resetBtnStyle: React.CSSProperties = {
+  background: "none",
+  border: "none",
+  color: "#6d7175",
+  fontSize: "13px",
+  cursor: "pointer",
+  padding: "4px 0",
 };
