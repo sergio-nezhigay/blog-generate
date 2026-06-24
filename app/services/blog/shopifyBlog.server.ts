@@ -211,6 +211,67 @@ export async function getShopifyArticles(
   };
 }
 
+export async function deleteShopifyArticle(
+  admin: { graphql: AdminGraphQL },
+  articleId: string,
+): Promise<void> {
+  const resp = await admin.graphql(`
+    mutation ArticleDelete($id: ID!) {
+      articleDelete(id: $id) {
+        deletedArticleId
+        userErrors { field message }
+      }
+    }
+  `, { variables: { id: articleId } });
+  const { data } = await resp.json() as {
+    data: { articleDelete: { deletedArticleId: string | null; userErrors: Array<{ field: string; message: string }> } };
+  };
+  if (data.articleDelete.userErrors.length > 0) {
+    throw new Error(data.articleDelete.userErrors.map(e => e.message).join(", "));
+  }
+}
+
+export async function checkArticlesExist(
+  admin: { graphql: AdminGraphQL },
+  articleIds: string[],
+): Promise<Set<string>> {
+  if (articleIds.length === 0) return new Set();
+  const resp = await admin.graphql(`
+    query CheckArticles($ids: [ID!]!) {
+      nodes(ids: $ids) { id }
+    }
+  `, { variables: { ids: articleIds } });
+  const { data } = await resp.json() as {
+    data: { nodes: Array<{ id: string } | null> };
+  };
+  return new Set(data.nodes.filter(Boolean).map((n) => (n as { id: string }).id));
+}
+
+export async function updateArticlePublished(
+  admin: { graphql: AdminGraphQL },
+  articleId: string,
+): Promise<{ handle: string; blogHandle: string }> {
+  const resp = await admin.graphql(`
+    mutation ArticlePublish($id: ID!, $article: ArticleUpdateInput!) {
+      articleUpdate(id: $id, article: $article) {
+        article { id handle blog { handle } }
+        userErrors { field message }
+      }
+    }
+  `, { variables: { id: articleId, article: { isPublished: true } } });
+  const { data } = await resp.json() as {
+    data: { articleUpdate: { article: { id: string; handle: string; blog: { handle: string } } | null; userErrors: Array<{ field: string; message: string }> } };
+  };
+  if (data.articleUpdate.userErrors.length > 0) {
+    throw new Error(data.articleUpdate.userErrors.map(e => e.message).join(", "));
+  }
+  if (!data.articleUpdate.article) throw new Error("articleUpdate returned no article");
+  return {
+    handle: data.articleUpdate.article.handle,
+    blogHandle: data.articleUpdate.article.blog.handle,
+  };
+}
+
 export async function publishArticleToShopify(
   admin: { graphql: AdminGraphQL },
   blogId: string,

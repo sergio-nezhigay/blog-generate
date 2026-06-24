@@ -44,12 +44,13 @@ model BlogContentPlan {
   contentFormat   String
   targetWordCount Int       @default(2000)
   keywords        String[]  @default([])
-  status          String    @default("planned")
-  articleId       String?
-  articleUrl      String?
-  publishedAt     DateTime?
-  errorMessage    String?
-  createdAt       DateTime  @default(now())
+  status               String    @default("planned")
+  generatingStartedAt  DateTime?
+  articleId            String?
+  articleUrl           String?
+  publishedAt          DateTime?
+  errorMessage         String?
+  createdAt            DateTime  @default(now())
 
   @@index([shop, scheduledDate, status])
   @@index([shop, weekStart])

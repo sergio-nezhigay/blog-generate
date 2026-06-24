@@ -366,11 +366,16 @@ export async function getTodaysPlan(shop: string, today: Date) {
   const end = new Date(start);
   end.setUTCDate(end.getUTCDate() + 1);
 
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+
   return db.blogContentPlan.findFirst({
     where: {
       shop,
       scheduledDate: { gte: start, lt: end },
-      status: { in: ["planned", "failed"] },
+      OR: [
+        { status: { in: ["planned", "failed"] } },
+        { status: "generating", generatingStartedAt: { lt: fiveMinutesAgo } },
+      ],
     },
   });
 }

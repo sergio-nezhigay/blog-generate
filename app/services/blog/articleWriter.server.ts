@@ -343,10 +343,16 @@ export async function publishPlanItem(
   const plan = await db.blogContentPlan.findUnique({ where: { id: planId } });
   if (!plan) throw new Error("Plan item not found");
   if (plan.shop !== shop) throw new Error("Not authorized");
-  if (plan.status === "published") throw new Error("Already published");
+  if (plan.status === "published" || plan.status === "draft") throw new Error("Already published");
+  if (plan.status === "generating") throw new Error("Generation already in progress");
 
   const settings = await db.blogSettings.findUnique({ where: { shop } });
   if (!settings?.blogId) throw new Error("No blog configured — go to Settings first.");
+
+  await db.blogContentPlan.update({
+    where: { id: planId },
+    data: { status: "generating", generatingStartedAt: new Date() },
+  });
 
   try {
     // 1. Keywords
@@ -434,14 +440,20 @@ export async function publishPlanItem(
       }
     }
 
-    // Construct storefront URL from blog/article handles
-    const articleUrl = `https://${shop}/blogs/${published.blogHandle}/${published.handle}`;
+    // Drafts link to the Shopify admin editor (storefront URL 404s for unpublished articles)
+    // Live articles link directly to the storefront
+    const numericId = published.id.split("/").pop();
+    const shopSlug = shop.replace(".myshopify.com", "");
+    const articleUrl = settings.testMode
+      ? `https://admin.shopify.com/store/${shopSlug}/content/articles/${numericId}`
+      : `https://${shop}/blogs/${published.blogHandle}/${published.handle}`;
 
     // 11. Update plan row
     await db.blogContentPlan.update({
       where: { id: planId },
       data: {
-        status: "published",
+        status: settings.testMode ? "draft" : "published",
+        generatingStartedAt: null,
         articleId: published.id,
         articleUrl,
         publishedAt: new Date(),
@@ -454,6 +466,7 @@ export async function publishPlanItem(
       where: { id: planId },
       data: {
         status: "failed",
+        generatingStartedAt: null,
         errorMessage: err instanceof Error ? err.message : "Unknown error",
       },
     });

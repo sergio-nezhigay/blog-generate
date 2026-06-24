@@ -2,7 +2,12 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useFetcher, useLoaderData } from "react-router";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
-import { getShopifyArticles } from "../services/blog/shopifyBlog.server";
+import {
+  getShopifyArticles,
+  checkArticlesExist,
+  deleteShopifyArticle,
+  updateArticlePublished,
+} from "../services/blog/shopifyBlog.server";
 import {
   generateWeeklyPlan,
   getWeekStart,
@@ -12,7 +17,7 @@ import {
 import { publishPlanItem } from "../services/blog/articleWriter.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
 
   const [plans, settings] = await Promise.all([
     db.blogContentPlan.findMany({
@@ -22,6 +27,33 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }),
     db.blogSettings.findUnique({ where: { shop: session.shop } }),
   ]);
+
+  // On-demand Shopify sync: detect articles deleted outside the app
+  const publishedPlans = plans.filter(
+    (p) => (p.status === "published" || p.status === "draft") && p.articleId,
+  );
+  if (publishedPlans.length > 0) {
+    const ids = publishedPlans.map((p) => p.articleId!);
+    try {
+      const existingIds = await checkArticlesExist(admin, ids);
+      const missingIds = ids.filter((id) => !existingIds.has(id));
+      if (missingIds.length > 0) {
+        await db.blogContentPlan.updateMany({
+          where: { articleId: { in: missingIds }, shop: session.shop },
+          data: { status: "deleted" },
+        });
+        // Reflect updates in returned data without a second DB round-trip
+        for (const plan of plans) {
+          if (plan.articleId && missingIds.includes(plan.articleId)) {
+            plan.status = "deleted";
+          }
+        }
+      }
+    } catch (syncErr) {
+      // Non-fatal: sync failure should not break the page
+      console.error("[plan loader] Shopify sync error:", syncErr instanceof Error ? syncErr.message : syncErr);
+    }
+  }
 
   const weekStart = getWeekStart(new Date());
   const planExists = await weekAlreadyPlanned(session.shop, weekStart);
@@ -65,7 +97,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     if (!planId) return { error: "Missing planId" };
     try {
       await publishPlanItem(admin, planId, session.shop);
-      return { success: true, intent: "publishNow", planId };
+      const settings = await db.blogSettings.findUnique({ where: { shop: session.shop } });
+      return { success: true, intent: "publishNow", planId, isDraft: !!settings?.testMode };
     } catch (err) {
       return {
         error: err instanceof Error ? err.message : "Publish failed",
@@ -74,23 +107,87 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
   }
 
+  if (intent === "publishLive") {
+    // Promote a Shopify draft article to live (test mode was on when it was created)
+    const planId = parseInt(formData.get("planId") as string, 10);
+    if (!planId) return { error: "Missing planId" };
+    const plan = await db.blogContentPlan.findUnique({
+      where: { id: planId, shop: session.shop },
+    });
+    if (!plan?.articleId) return { error: "No article linked to this plan item" };
+    try {
+      const promoted = await updateArticlePublished(admin, plan.articleId);
+      const storefrontUrl = `https://${session.shop}/blogs/${promoted.blogHandle}/${promoted.handle}`;
+      await db.blogContentPlan.update({
+        where: { id: planId },
+        data: { status: "published", articleUrl: storefrontUrl },
+      });
+      return { success: true, intent: "publishLive" };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : "Failed to publish live", intent: "publishLive" };
+    }
+  }
+
   if (intent === "resetToPlan") {
+    // Deletes the article from Shopify (if it exists) and resets the plan row to "planned"
+    const planId = parseInt(formData.get("planId") as string, 10);
+    if (!planId) return { error: "Missing planId" };
+    const plan = await db.blogContentPlan.findUnique({
+      where: { id: planId, shop: session.shop },
+    });
+    if (!plan) return { error: "Plan not found" };
+
+    if ((plan.status === "published" || plan.status === "draft") && plan.articleId) {
+      try {
+        await deleteShopifyArticle(admin, plan.articleId);
+      } catch (err) {
+        console.error("[resetToPlan] Shopify delete error:", err instanceof Error ? err.message : err);
+        // Continue even if Shopify delete fails — the article may already be gone
+      }
+    }
+
+    await db.blogContentPlan.update({
+      where: { id: planId, shop: session.shop },
+      data: {
+        status: "planned",
+        generatingStartedAt: null,
+        articleId: null,
+        articleUrl: null,
+        publishedAt: null,
+        errorMessage: null,
+      },
+    });
+    return { success: true, intent: "resetToPlan" };
+  }
+
+  if (intent === "dismissToPlan") {
+    // Clears failed/deleted status back to planned without any Shopify API call
     const planId = parseInt(formData.get("planId") as string, 10);
     if (!planId) return { error: "Missing planId" };
     await db.blogContentPlan.update({
       where: { id: planId, shop: session.shop },
-      data: { status: "planned", articleId: null, articleUrl: null, publishedAt: null, errorMessage: null },
+      data: {
+        status: "planned",
+        generatingStartedAt: null,
+        articleId: null,
+        articleUrl: null,
+        publishedAt: null,
+        errorMessage: null,
+      },
     });
-    return { success: true, intent: "resetToPlan" };
+    return { success: true, intent: "dismissToPlan" };
   }
 
   return { error: "Unknown intent" };
 };
 
-const STATUS_BADGE: Record<string, { tone: string; label: string }> = {
-  planned: { tone: "neutral", label: "Planned" },
-  published: { tone: "success", label: "Published" },
-  failed: { tone: "critical", label: "Failed" },
+const STATUS_BADGE: Record<string, { tone: "neutral" | "success" | "critical" | "caution" | "info" | "warning"; label: string; subText?: string }> = {
+  planned:    { tone: "neutral",   label: "Planned" },
+  generating: { tone: "info",      label: "Generating…" },
+  draft:      { tone: "warning",   label: "Draft",     subText: "Not live on storefront" },
+  published:  { tone: "success",   label: "Published" },
+  failed:     { tone: "critical",  label: "Failed" },
+  deleted:    { tone: "critical",  label: "Deleted",   subText: "Removed from Shopify" },
 };
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -115,34 +212,68 @@ export default function BlogPlan() {
       ? Number(fetcher.formData.get("planId"))
       : null;
 
+  const publishingLivePlanId =
+    fetcher.state !== "idle" && fetcher.formData?.get("intent") === "publishLive"
+      ? Number(fetcher.formData.get("planId"))
+      : null;
+
   const resettingPlanId =
     fetcher.state !== "idle" && fetcher.formData?.get("intent") === "resetToPlan"
       ? Number(fetcher.formData.get("planId"))
       : null;
 
+  const dismissingPlanId =
+    fetcher.state !== "idle" && fetcher.formData?.get("intent") === "dismissToPlan"
+      ? Number(fetcher.formData.get("planId"))
+      : null;
+
+  const anyActionInProgress = fetcher.state !== "idle";
+
   function submitPublish(planId: number) {
     fetcher.submit({ intent: "publishNow", planId: String(planId) }, { method: "post" });
+  }
+
+  function submitPublishLive(planId: number) {
+    fetcher.submit({ intent: "publishLive", planId: String(planId) }, { method: "post" });
   }
 
   function submitReset(planId: number) {
     fetcher.submit({ intent: "resetToPlan", planId: String(planId) }, { method: "post" });
   }
 
+  function submitDismiss(planId: number) {
+    fetcher.submit({ intent: "dismissToPlan", planId: String(planId) }, { method: "post" });
+  }
+
+  // Summary counts
+  const counts = plans.reduce<Record<string, number>>((acc, p) => {
+    acc[p.status] = (acc[p.status] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  const actionData = fetcher.data;
+
   return (
     <s-page heading="Content Plan">
-      {fetcher.data && "error" in fetcher.data && (
-        <s-banner tone="critical">{fetcher.data.error}</s-banner>
+      {actionData && "error" in actionData && (
+        <s-banner tone="critical">{actionData.error}</s-banner>
       )}
-      {fetcher.data && "success" in fetcher.data && fetcher.data.intent === "generatePlan" && (
+      {actionData && "success" in actionData && actionData.intent === "generatePlan" && (
         <s-banner tone="success">Weekly plan generated — 7 articles scheduled.</s-banner>
       )}
-      {fetcher.data && "success" in fetcher.data && fetcher.data.intent === "publishNow" && (
+      {actionData && "success" in actionData && actionData.intent === "publishNow" && (
         <s-banner tone="success">
-          Article {settings?.testMode ? "created as draft (test mode)" : "published"} to Shopify.
+          Article {(actionData as { isDraft?: boolean }).isDraft ? "created as draft (test mode)" : "published"} to Shopify.
         </s-banner>
       )}
-      {fetcher.data && "success" in fetcher.data && fetcher.data.intent === "resetToPlan" && (
-        <s-banner tone="info">Article reset to planned — ready to republish.</s-banner>
+      {actionData && "success" in actionData && actionData.intent === "publishLive" && (
+        <s-banner tone="success">Draft article published live to Shopify.</s-banner>
+      )}
+      {actionData && "success" in actionData && actionData.intent === "resetToPlan" && (
+        <s-banner tone="info">Article deleted from Shopify and reset to planned.</s-banner>
+      )}
+      {actionData && "success" in actionData && actionData.intent === "dismissToPlan" && (
+        <s-banner tone="info">Article cleared — ready to regenerate.</s-banner>
       )}
       {settings?.testMode && (
         <s-banner tone="warning">
@@ -150,7 +281,6 @@ export default function BlogPlan() {
           Disable in <s-link href="/app/blog/settings">Settings</s-link>.
         </s-banner>
       )}
-
       {!settings?.blogId && (
         <s-banner tone="warning">
           No blog selected. Go to{" "}
@@ -215,10 +345,21 @@ export default function BlogPlan() {
         </s-section>
       ) : (
         <s-section heading="Scheduled Articles">
+          {/* Summary row */}
+          {plans.length > 0 && (
+            <div style={summaryStyle}>
+              {counts.published ? <span style={summaryItemStyle}><span style={{ color: "#008060" }}>●</span> {counts.published} Published</span> : null}
+              {counts.draft ? <span style={summaryItemStyle}><span style={{ color: "#b98900" }}>●</span> {counts.draft} Draft</span> : null}
+              {counts.generating ? <span style={summaryItemStyle}><span style={{ color: "#2c6ecb" }}>●</span> {counts.generating} Generating</span> : null}
+              {counts.planned ? <span style={summaryItemStyle}><span style={{ color: "#8c9196" }}>●</span> {counts.planned} Planned</span> : null}
+              {counts.failed ? <span style={summaryItemStyle}><span style={{ color: "#d72c0d" }}>●</span> {counts.failed} Failed</span> : null}
+              {counts.deleted ? <span style={summaryItemStyle}><span style={{ color: "#d72c0d" }}>●</span> {counts.deleted} Deleted</span> : null}
+            </div>
+          )}
           <div style={{ overflowX: "auto" }}><table style={tableStyle}>
             <thead>
               <tr>
-                {["Date", "Day", "Category", "Topic", "Status", ""].map((h, i) => (
+                {["Date", "Day", "Category", "Topic", "Status", "Actions"].map((h, i) => (
                   <th key={i} style={thStyle}>
                     {h}
                   </th>
@@ -230,9 +371,23 @@ export default function BlogPlan() {
                 const badge = STATUS_BADGE[plan.status] ?? STATUS_BADGE.planned;
                 const date = new Date(plan.scheduledDate);
                 const dayName = DAY_NAMES[plan.dayIndex] ?? "";
-                const isPublishing = publishingPlanId === plan.id;
+                const isThisPublishing = publishingPlanId === plan.id;
+                const isThisPublishingLive = publishingLivePlanId === plan.id;
+                const isThisResetting = resettingPlanId === plan.id;
+                const isThisDismissing = dismissingPlanId === plan.id;
+
+                // Optimistic generating state: show spinner row when publish is in progress
+                const effectiveStatus = isThisPublishing ? "generating" : plan.status;
+                const effectiveBadge = STATUS_BADGE[effectiveStatus] ?? badge;
+
+                const rowStyle: React.CSSProperties = {
+                  ...trStyle,
+                  ...(effectiveStatus === "generating" ? { background: "#f0f6ff" } : {}),
+                  ...(effectiveStatus === "failed" || effectiveStatus === "deleted" ? { background: "#fff5f5" } : {}),
+                };
+
                 return (
-                  <tr key={plan.id} style={trStyle}>
+                  <tr key={plan.id} style={rowStyle}>
                     <td style={tdStyle}>
                       {date.toLocaleDateString("en-GB", {
                         day: "2-digit",
@@ -252,47 +407,123 @@ export default function BlogPlan() {
                       ) : (
                         plan.topic
                       )}
-                      {plan.errorMessage && (
-                        <div style={{ color: "#d72c0d", fontSize: "12px", marginTop: "4px" }}>
-                          {plan.errorMessage}
-                        </div>
+                      {plan.errorMessage && plan.status === "failed" && (
+                        <details style={{ marginTop: "4px" }}>
+                          <summary style={{ color: "#d72c0d", fontSize: "12px", cursor: "pointer" }}>
+                            Show error
+                          </summary>
+                          <div style={{ color: "#d72c0d", fontSize: "12px", marginTop: "2px", wordBreak: "break-word" }}>
+                            {plan.errorMessage}
+                          </div>
+                        </details>
                       )}
                     </td>
                     <td style={tdStyle}>
-                      <s-badge
-                        tone={
-                          badge.tone as
-                            | "neutral"
-                            | "success"
-                            | "critical"
-                            | "caution"
-                            | "info"
-                            | "warning"
-                        }
-                      >
-                        {badge.label}
+                      <s-badge tone={effectiveBadge.tone}>
+                        {effectiveBadge.label}
                       </s-badge>
+                      {effectiveBadge.subText && (
+                        <div style={{ fontSize: "11px", color: "#6d7175", marginTop: "2px" }}>
+                          {effectiveBadge.subText}
+                        </div>
+                      )}
+                      {plan.status === "published" && plan.publishedAt && (
+                        <div style={{ fontSize: "11px", color: "#6d7175", marginTop: "2px" }}>
+                          {new Date(plan.publishedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" })}
+                        </div>
+                      )}
                     </td>
-                    <td style={{ ...tdStyle, width: "110px" }}>
-                      {plan.status === "planned" || plan.status === "failed" ? (
+                    <td style={{ ...tdStyle, width: "160px" }}>
+                      {plan.status === "planned" && (
                         <s-button
                           onClick={() => submitPublish(plan.id)}
-                          {...(isPublishing ? { loading: true } : {})}
-                          {...(publishingPlanId !== null && !isPublishing
-                            ? { disabled: true }
-                            : {})}
+                          {...(isThisPublishing ? { loading: true } : {})}
+                          {...(anyActionInProgress && !isThisPublishing ? { disabled: true } : {})}
                         >
-                          {isPublishing ? "Publishing…" : "Publish"}
+                          Generate
                         </s-button>
-                      ) : plan.status === "published" ? (
-                        <button
-                          onClick={() => submitReset(plan.id)}
-                          disabled={resettingPlanId === plan.id || publishingPlanId !== null || (resettingPlanId !== null && resettingPlanId !== plan.id)}
-                          style={resetBtnStyle}
-                        >
-                          {resettingPlanId === plan.id ? "…" : "Reset"}
-                        </button>
-                      ) : null}
+                      )}
+
+                      {plan.status === "generating" && !isThisPublishing && (
+                        <span style={{ fontSize: "13px", color: "#2c6ecb" }}>In progress…</span>
+                      )}
+
+                      {plan.status === "draft" && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                          <s-button
+                            onClick={() => submitPublishLive(plan.id)}
+                            {...(isThisPublishingLive ? { loading: true } : {})}
+                            {...(anyActionInProgress && !isThisPublishingLive ? { disabled: true } : {})}
+                          >
+                            {isThisPublishingLive ? "Going live…" : "Go Live"}
+                          </s-button>
+                          <div style={{ display: "flex", gap: "8px", alignItems: "center", marginTop: "2px" }}>
+                            {plan.articleUrl && (
+                              <s-link href={plan.articleUrl} target="_blank">Edit in Admin ↗</s-link>
+                            )}
+                            <button
+                              onClick={() => submitReset(plan.id)}
+                              disabled={anyActionInProgress}
+                              style={linkBtnStyle}
+                            >
+                              {isThisResetting ? "…" : "Delete"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {plan.status === "published" && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                          {plan.articleUrl && (
+                            <s-link href={plan.articleUrl} target="_blank">View Article ↗</s-link>
+                          )}
+                          <button
+                            onClick={() => submitReset(plan.id)}
+                            disabled={anyActionInProgress}
+                            style={linkBtnStyle}
+                          >
+                            {isThisResetting ? "…" : "Unpublish"}
+                          </button>
+                        </div>
+                      )}
+
+                      {plan.status === "failed" && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                          <s-button
+                            onClick={() => submitPublish(plan.id)}
+                            {...(isThisPublishing ? { loading: true } : {})}
+                            {...(anyActionInProgress && !isThisPublishing ? { disabled: true } : {})}
+                          >
+                            {isThisPublishing ? "Generating…" : "Retry"}
+                          </s-button>
+                          <button
+                            onClick={() => submitDismiss(plan.id)}
+                            disabled={anyActionInProgress}
+                            style={linkBtnStyle}
+                          >
+                            {isThisDismissing ? "…" : "Dismiss"}
+                          </button>
+                        </div>
+                      )}
+
+                      {plan.status === "deleted" && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                          <s-button
+                            onClick={() => submitPublish(plan.id)}
+                            {...(isThisPublishing ? { loading: true } : {})}
+                            {...(anyActionInProgress && !isThisPublishing ? { disabled: true } : {})}
+                          >
+                            {isThisPublishing ? "Publishing…" : "Republish"}
+                          </s-button>
+                          <button
+                            onClick={() => submitDismiss(plan.id)}
+                            disabled={anyActionInProgress}
+                            style={linkBtnStyle}
+                          >
+                            {isThisDismissing ? "…" : "Dismiss"}
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 );
@@ -349,12 +580,29 @@ const noteStyle: React.CSSProperties = {
   padding: "0 12px",
 };
 
-const resetBtnStyle: React.CSSProperties = {
+const summaryStyle: React.CSSProperties = {
+  display: "flex",
+  gap: "16px",
+  padding: "8px 12px",
+  marginBottom: "8px",
+  fontSize: "13px",
+  color: "#6d7175",
+  flexWrap: "wrap",
+};
+
+const summaryItemStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "5px",
+};
+
+const linkBtnStyle: React.CSSProperties = {
   background: "none",
   border: "none",
   color: "#6d7175",
-  fontSize: "13px",
+  fontSize: "12px",
   cursor: "pointer",
-  padding: "4px 0",
+  padding: "0",
   textDecoration: "underline",
+  textAlign: "left",
 };
