@@ -359,7 +359,6 @@ export async function publishPlanItem(
     const { articles: existingArticles, blogHandle } = await getShopifyArticles(admin, settings.blogId);
     const linkCandidates = selectRelevantArticles(plan.topic, keywords, existingArticles);
     const productLinks = (settings.productLinks as unknown as ProductLink[]) ?? [];
-    console.log(`[internal-links] blog: /blogs/${blogHandle}/ | fetched: ${existingArticles.length} articles | candidates: ${linkCandidates.map((a) => `"${a.title}"`).join(", ") || "none"} | product links: ${productLinks.length}`);
 
     // 4. Article body (HTML)
     const bodyHtml = await generateArticleBody(
@@ -411,10 +410,6 @@ export async function publishPlanItem(
     if (faqItems.length > 0) {
       finalBodyHtml += buildFaqPageSchema(faqItems);
     }
-
-    const internalLinkCount = (finalBodyHtml.match(/<a\s+href="\/blogs\//g) ?? []).length;
-    const productLinkCount = (finalBodyHtml.match(/<a\s+href="\/collections\/|<a\s+href="\/pages\//g) ?? []).length;
-    console.log(`[internal-links] Links in published HTML — internal articles: ${internalLinkCount}, products/pages: ${productLinkCount}`);
 
     // 9. Publish to Shopify
     const displayTitle = (meta.title && meta.title.trim()) || plan.topic;
