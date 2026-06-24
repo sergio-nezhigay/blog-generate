@@ -48,6 +48,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     return {
       name: cat.name,
       baseCount,
+      baseQuestions: cat.questionPool ?? [],
       extendedQuestions: extendedQA[cat.name] ?? [],
       total,
       used,
@@ -165,10 +166,17 @@ export const action = async ({ request }: ActionFunctionArgs): Promise<ActionDat
 
 // ---- Component ----
 
-function runwayLabel(remaining: number): string {
-  if (remaining <= 3) return "🔴 Critical";
-  if (remaining <= 8) return "🟡 Low";
-  return "🟢 Good";
+function runwayBadge(remaining: number) {
+  if (remaining <= 3) return { label: "Critical", bg: "#fff4f4", color: "#d72c0d", border: "#f4b0a1" };
+  if (remaining <= 8) return { label: "Low", bg: "#fff8e7", color: "#916a00", border: "#f5c84a" };
+  return { label: "Good", bg: "#f0faf0", color: "#1a7a1a", border: "#96d096" };
+}
+
+function prettifySlug(slug: string): string {
+  return slug
+    .replace(/^qa-/, "")
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 export default function BlogPools() {
@@ -181,6 +189,8 @@ export default function BlogPools() {
   const [pendingSuggestions, setPendingSuggestions] = useState<string[]>([]);
   // Manual question input per category
   const [manualInputs, setManualInputs] = useState<Record<string, string>>({});
+  // Which pool cards have their hardcoded questions expanded
+  const [expandedHardcoded, setExpandedHardcoded] = useState<Record<string, boolean>>({});
   // Proposed new fashion category from AI
   const [proposedFashion, setProposedFashion] = useState<{
     name: string; format: string; titlePattern: string; targetWordCount: number;
@@ -274,44 +284,66 @@ export default function BlogPools() {
           const isActiveCategory = activeQACategory === cat.name;
           const showSuggestions = isActiveCategory && pendingSuggestions.length > 0;
           const isLoadingThis = isGenerating && isActiveCategory;
+          const badge = runwayBadge(cat.remaining);
+          const isExpanded = expandedHardcoded[cat.name] ?? false;
 
           return (
             <div
               key={cat.name}
               style={{
-                marginBottom: "24px",
+                marginBottom: "16px",
                 padding: "16px",
                 border: "1px solid #e1e3e5",
                 borderRadius: "8px",
               }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+              {/* Header row */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "4px" }}>
                 <div>
-                  <strong style={{ fontSize: "14px" }}>{cat.name}</strong>
-                  <span style={{ marginLeft: "12px", fontSize: "13px", color: "#6d7175" }}>
-                    {cat.total} questions total · {cat.used} published · {cat.remaining} remaining
-                  </span>
-                  <span style={{ marginLeft: "8px", fontSize: "12px" }}>
-                    {runwayLabel(cat.remaining)}
-                  </span>
+                  <strong style={{ fontSize: "14px" }}>{prettifySlug(cat.name)}</strong>
+                  <span style={{ marginLeft: "8px", fontSize: "11px", color: "#8c9196" }}>{cat.name}</span>
                 </div>
-                <s-button
-                  onClick={() => handleGenerateQA(cat.name)}
-                  variant="secondary"
-                  {...(isLoadingThis ? { loading: true } : {})}
-                >
-                  Suggest 10 more
-                </s-button>
+                <span style={{
+                  fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: "12px",
+                  background: badge.bg, color: badge.color, border: `1px solid ${badge.border}`,
+                }}>
+                  {badge.label}
+                </span>
               </div>
 
-              {/* Base pool count */}
-              <p style={{ fontSize: "12px", color: "#8c9196", margin: "4px 0" }}>
-                {cat.baseCount} hardcoded · {cat.extendedQuestions.length} added by you
+              {/* Stats row */}
+              <p style={{ fontSize: "12px", color: "#6d7175", margin: "0 0 4px" }}>
+                {cat.total} questions · {cat.used} published · {cat.remaining} remaining
               </p>
 
-              {/* Extended questions */}
+              {/* Hardcoded toggle */}
+              <p style={{ fontSize: "12px", color: "#8c9196", margin: "0 0 8px" }}>
+                {cat.extendedQuestions.length} added by you ·{" "}
+                <button
+                  onClick={() => setExpandedHardcoded((prev) => ({ ...prev, [cat.name]: !prev[cat.name] }))}
+                  style={{ border: "none", background: "none", color: "#2c6ecb", cursor: "pointer", fontSize: "12px", padding: 0, textDecoration: "underline" }}
+                >
+                  {isExpanded ? `hide ${cat.baseCount} hardcoded` : `view ${cat.baseCount} hardcoded`}
+                </button>
+              </p>
+
+              {/* Hardcoded questions (collapsed by default) */}
+              {isExpanded && (
+                <div style={{ marginBottom: "10px", padding: "8px 10px", background: "#f9fafb", border: "1px solid #e1e3e5", borderRadius: "6px" }}>
+                  <p style={{ fontSize: "11px", fontWeight: 600, color: "#8c9196", margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                    Hardcoded questions (read-only)
+                  </p>
+                  {cat.baseQuestions.map((q) => (
+                    <div key={q} style={{ fontSize: "12px", color: "#4a4a4a", padding: "3px 0", borderBottom: "1px solid #f0f0f0" }}>
+                      {q}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* User-added questions */}
               {cat.extendedQuestions.length > 0 && (
-                <div style={{ marginTop: "8px" }}>
+                <div style={{ marginBottom: "8px" }}>
                   {cat.extendedQuestions.map((q) => (
                     <div
                       key={q}
@@ -340,7 +372,7 @@ export default function BlogPools() {
 
               {/* AI suggestions */}
               {showSuggestions && (
-                <div style={{ marginTop: "12px" }}>
+                <div style={{ marginBottom: "10px" }}>
                   <p style={{ fontSize: "12px", fontWeight: 600, marginBottom: "6px", color: "#2c6ecb" }}>
                     AI Suggestions — click ✓ to add, ✕ to skip:
                   </p>
@@ -381,8 +413,8 @@ export default function BlogPools() {
                 </div>
               )}
 
-              {/* Manual add */}
-              <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+              {/* Manual add + Suggest */}
+              <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
                 <input
                   type="text"
                   placeholder="Add a question manually…"
@@ -396,6 +428,13 @@ export default function BlogPools() {
                   variant="secondary"
                 >
                   Add
+                </s-button>
+                <s-button
+                  onClick={() => handleGenerateQA(cat.name)}
+                  variant="secondary"
+                  {...(isLoadingThis ? { loading: true } : {})}
+                >
+                  Suggest 10
                 </s-button>
               </div>
             </div>
