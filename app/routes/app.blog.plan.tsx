@@ -190,6 +190,15 @@ const STATUS_BADGE: Record<string, { tone: "neutral" | "success" | "critical" | 
   deleted:    { tone: "critical",  label: "Deleted",   subText: "Removed from Shopify" },
 };
 
+const STATUS_COLOR: Record<string, string> = {
+  planned:    "#8c9196",
+  generating: "#2c6ecb",
+  draft:      "#b98900",
+  published:  "#008060",
+  failed:     "#d72c0d",
+  deleted:    "#d72c0d",
+};
+
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export default function BlogPlan() {
@@ -312,11 +321,12 @@ export default function BlogPlan() {
 
       {dryRunResult && (
         <s-section heading={`Simulation — ${dryRunResult.weekType === "fashion" ? "Fashion" : "Q&A"} week`}>
+          <div style={{ border: "1px solid #e1e3e5", borderRadius: "8px", overflow: "hidden" }}>
           <div style={{ overflowX: "auto" }}>
             <table style={tableStyle}>
               <thead>
                 <tr>
-                  {["Day", "Category", "Topic (not saved)"].map((h, i) => (
+                  {["Day", "Topic (not saved)"].map((h, i) => (
                     <th key={i} style={thStyle}>{h}</th>
                   ))}
                 </tr>
@@ -324,13 +334,16 @@ export default function BlogPlan() {
               <tbody>
                 {dryRunResult.topics.map((t) => (
                   <tr key={t.dayIndex} style={trStyle}>
-                    <td style={tdStyle}>{DAY_NAMES[t.dayIndex] ?? t.dayIndex}</td>
-                    <td style={tdStyle}><span style={categoryStyle}>{t.category}</span></td>
+                    <td style={{ ...dateCellStyle, borderLeft: "4px solid #8c9196" }}>
+                      <div style={{ fontWeight: 600, fontSize: "13px" }}>{DAY_NAMES[t.dayIndex] ?? t.dayIndex}</div>
+                      <div style={{ marginTop: "4px" }}><span style={categoryStyle}>{t.category}</span></div>
+                    </td>
                     <td style={tdStyle}>{t.topic}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
           </div>
           <p style={noteStyle}>Simulation only — no articles saved or scheduled.</p>
         </s-section>
@@ -356,10 +369,11 @@ export default function BlogPlan() {
               {counts.deleted ? <span style={summaryItemStyle}><span style={{ color: "#d72c0d" }}>●</span> {counts.deleted} Deleted</span> : null}
             </div>
           )}
+          <div style={{ border: "1px solid #e1e3e5", borderRadius: "8px", overflow: "hidden" }}>
           <div style={{ overflowX: "auto" }}><table style={tableStyle}>
             <thead>
               <tr>
-                {["Date", "Day", "Category", "Topic", "Status", "Actions"].map((h, i) => (
+                {["Date", "Topic", "Status", "Actions"].map((h, i) => (
                   <th key={i} style={thStyle}>
                     {h}
                   </th>
@@ -388,16 +402,15 @@ export default function BlogPlan() {
 
                 return (
                   <tr key={plan.id} style={rowStyle}>
-                    <td style={tdStyle}>
-                      {date.toLocaleDateString("en-GB", {
-                        day: "2-digit",
-                        month: "short",
-                        timeZone: "UTC",
-                      })}
-                    </td>
-                    <td style={tdStyle}>{dayName}</td>
-                    <td style={tdStyle}>
-                      <span style={categoryStyle}>{plan.category}</span>
+                    <td style={{ ...dateCellStyle, borderLeft: `4px solid ${STATUS_COLOR[effectiveStatus] ?? "#8c9196"}` }}>
+                      <div style={{ fontWeight: 600, fontSize: "13px" }}>
+                        {date.toLocaleDateString("en-GB", {
+                          day: "2-digit",
+                          month: "short",
+                          timeZone: "UTC",
+                        })}
+                      </div>
+                      <div style={{ fontSize: "11px", color: "#8c9196", marginTop: "2px" }}>{dayName}</div>
                     </td>
                     <td style={{ ...tdStyle, maxWidth: "340px" }}>
                       {plan.articleUrl ? (
@@ -405,8 +418,11 @@ export default function BlogPlan() {
                           {plan.topic}
                         </s-link>
                       ) : (
-                        plan.topic
+                        <span style={{ color: "#202223", fontWeight: 500 }}>{plan.topic}</span>
                       )}
+                      <div style={{ marginTop: "5px" }}>
+                        <span style={categoryStyle}>{plan.category}</span>
+                      </div>
                       {plan.errorMessage && plan.status === "failed" && (
                         <details style={{ marginTop: "4px" }}>
                           <summary style={{ color: "#d72c0d", fontSize: "12px", cursor: "pointer" }}>
@@ -530,6 +546,7 @@ export default function BlogPlan() {
               })}
             </tbody>
           </table></div>
+          </div>
           <p style={noteStyle}>
             Publishing takes 90–120 seconds (keywords → research → article → images → Shopify). Keep this page open.
           </p>
@@ -547,8 +564,8 @@ const tableStyle: React.CSSProperties = {
 
 const thStyle: React.CSSProperties = {
   textAlign: "left",
-  padding: "8px 12px",
-  borderBottom: "2px solid #e1e3e5",
+  padding: "10px 16px",
+  borderBottom: "1px solid #e1e3e5",
   fontWeight: 600,
   color: "#6d7175",
   fontSize: "12px",
@@ -557,9 +574,15 @@ const thStyle: React.CSSProperties = {
 };
 
 const tdStyle: React.CSSProperties = {
-  padding: "10px 12px",
+  padding: "14px 16px",
   borderBottom: "1px solid #f1f2f3",
   verticalAlign: "top",
+};
+
+const dateCellStyle: React.CSSProperties = {
+  ...tdStyle,
+  whiteSpace: "nowrap",
+  width: "80px",
 };
 
 const trStyle: React.CSSProperties = {};
