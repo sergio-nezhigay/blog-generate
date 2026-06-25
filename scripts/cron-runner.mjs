@@ -42,4 +42,10 @@ cron.schedule('0 11 * * *', () => {
   call('/api/cron/daily');
 });
 
-console.log('[cron] Scheduler running. Next: Mon 09:00 UTC weekly, daily 10:00 UTC (retry 11:00 UTC).');
+// 1st of each month 12:00 UTC — refresh stale year references in published articles
+cron.schedule('0 12 1 * *', () => {
+  console.log('[cron] Running article refresher...');
+  call('/api/cron/refresh');
+});
+
+console.log('[cron] Scheduler running. Next: Mon 09:00 UTC weekly, daily 10:00 UTC (retry 11:00 UTC), 1st of month 12:00 UTC refresh.');

@@ -272,6 +272,47 @@ export async function updateArticlePublished(
   };
 }
 
+export async function getArticleBody(
+  admin: { graphql: AdminGraphQL },
+  articleGid: string,
+): Promise<{ title: string; bodyHtml: string }> {
+  const resp = await admin.graphql(`
+    query GetArticleBody($id: ID!) {
+      article(id: $id) {
+        title
+        body
+      }
+    }
+  `, { variables: { id: articleGid } });
+  const { data } = await resp.json() as {
+    data: { article: { title: string; body: string } | null };
+  };
+  if (!data.article) throw new Error(`Article not found: ${articleGid}`);
+  return { title: data.article.title, bodyHtml: data.article.body };
+}
+
+export async function updateArticleContent(
+  admin: { graphql: AdminGraphQL },
+  articleGid: string,
+  title: string,
+  body: string,
+): Promise<void> {
+  const resp = await admin.graphql(`
+    mutation UpdateArticleContent($id: ID!, $article: ArticleUpdateInput!) {
+      articleUpdate(id: $id, article: $article) {
+        article { id }
+        userErrors { field message }
+      }
+    }
+  `, { variables: { id: articleGid, article: { title, body } } });
+  const { data } = await resp.json() as {
+    data: { articleUpdate: { article: { id: string } | null; userErrors: Array<{ field: string; message: string }> } };
+  };
+  if (data.articleUpdate.userErrors.length > 0) {
+    throw new Error(data.articleUpdate.userErrors.map(e => e.message).join(", "));
+  }
+}
+
 export async function publishArticleToShopify(
   admin: { graphql: AdminGraphQL },
   blogId: string,
