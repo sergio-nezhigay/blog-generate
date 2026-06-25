@@ -17,10 +17,6 @@ Weekly pass that detects articles with stale year references in titles (e.g. "Be
 correct ratio for target images
 
 
-**5. Internal Linker**  
-Post-publish pass that reads all published articles, finds ones with fewer than 3 internal links, and uses GPT to identify natural anchor text opportunities pointing to topically related articles. Also adds a `/pages/services` link if missing, and reverse-links newer articles from older ones that mention them. Runs weekly. Significant SEO value (internal link equity distribution).  
-*Files:* new `internalLinker.server.ts`, new `api.cron.linker.tsx`, `cron-runner.mjs`
-
 
 
 
