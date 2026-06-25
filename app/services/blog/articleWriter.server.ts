@@ -140,6 +140,8 @@ async function generateArticleBody(
         content: `You are an expert content writer producing SEO-optimized HTML blog articles for ${settings.brandName}.
 ${ICP_CONTEXT}
 
+CRITICAL — WORD COUNT: The finished article MUST contain a minimum of 1800 words of readable text (excluding HTML tags), aiming for 2000+. This is non-negotiable. Write every section in full depth. Do not summarise or cut sections short. If you finish a section in fewer than 200 words, expand it with additional professional insights, examples, or nuance before moving on.
+
 CRITICAL HTML RULES:
 - Do NOT include <h1> (the theme provides it from the article title)
 - Do NOT use <script>, <style>, or <link> tags
@@ -158,11 +160,10 @@ COLLECTIONS LINK (use max 1 time): ${settings.servicesUrl}`,
       },
       {
         role: "user",
-        content: `Write a complete, SEO-optimized HTML blog article.
+        content: `Write a complete, SEO-optimized HTML blog article. TARGET LENGTH: 1800–2200 words of readable text.
 
 TITLE: "${topic}"
 CATEGORY: ${category}
-TARGET: 1800–2200 words
 KEYWORDS: ${keywords.join(", ")}
 
 RESEARCH CONTEXT:
@@ -172,11 +173,11 @@ REQUIRED STRUCTURE (output raw HTML only, no markdown):
 1. <p class="answer-first"><strong>[2-3 sentence direct answer to the title — optimized for AI/chatbot snippet citation]</strong></p>
 2. <h2 id="introduction">Introduction</h2> — 150-200 words with a hook
 3. <nav class="toc"><h3>In This Article</h3><ul>[<li><a href="#section-id">Section Name</a></li> for each H2]</ul></nav>
-4. [7-10 <h2> sections, each 150-200 words, with concrete examples and professional insights — no invented statistics]
-5. <h2 id="faq">Frequently Asked Questions</h2> — 5-7 Q&A using <details><summary>Question</summary><p>Answer</p></details> (omit if FORMAT RULES above say NO FAQ)
+4. [9-10 <h2> sections, EACH SECTION MINIMUM 200 words — write with depth, concrete examples, and professional insights; do not move to the next section until the current one reaches 200 words]
+5. <h2 id="faq">Frequently Asked Questions</h2> — 5-7 Q&A using <details><summary>Question</summary><p>Answer</p></details>; each answer must be 2-4 sentences
 6. <div class="cta-block"><p>Call to action paragraph linking to <a href="${settings.ctaUrl}">${settings.brandName}</a></p></div>
 
-Output only the HTML body content. No <html>, <head>, <body> tags. Start directly with <p class="answer-first">.`,
+REMINDER: The total article must reach a minimum of 1800 words, targeting 2000+. Output only the HTML body content. No <html>, <head>, <body> tags. Start directly with <p class="answer-first">.`,
       },
     ],
     { temperature: 0.7, maxTokens: 5500 },
