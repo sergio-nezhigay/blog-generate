@@ -264,14 +264,14 @@ async function generateImages(
   title: string,
   h2Headings: string[],
 ): Promise<{ heroB64: string; sectionB64s: string[] }> {
-  const heroPrompt = `Professional studio photo of high-end makeup brushes and cosmetic tools for article about: ${title.slice(0, 100)}. Elegant product arrangement on neutral background. No text, no words, no letters. Soft studio lighting.`;
+  const heroPrompt = `Professional studio product photo for: ${title.slice(0, 120)}. Clean neutral background, elegant arrangement. No text, no words, no letters. Soft studio lighting.`;
   const heroB64 = await generateSingleImage(heroPrompt);
 
   // Pick 2nd and 4th headings (index 1 and 3) for section images
   const sectionHeadings = [h2Headings[1], h2Headings[3]].filter(Boolean) as string[];
   const sectionB64s: string[] = [];
   for (const heading of sectionHeadings) {
-    const sectionPrompt = `Professional macro photo of beauty and makeup products representing: ${heading.slice(0, 120)}. Studio setting, clean neutral background. No text, no words, no letters.`;
+    const sectionPrompt = `Professional macro photo for article "${title.slice(0, 80)}", section about: ${heading.slice(0, 100)}. Studio setting, clean neutral background. No text, no words, no letters.`;
     sectionB64s.push(await generateSingleImage(sectionPrompt));
   }
 
