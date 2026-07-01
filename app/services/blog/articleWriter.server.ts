@@ -294,6 +294,9 @@ function injectSectionImages(html: string, imageUrls: string[], alts: string[]):
 
 function sanitizeHTML(html: string): string {
   return html
+    .trim()
+    .replace(/^```(?:html)?\s*/i, "")
+    .replace(/```\s*$/i, "")
     .replace(/<h1[^>]*>[\s\S]*?<\/h1>/gi, "")
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
