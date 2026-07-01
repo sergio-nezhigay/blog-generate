@@ -246,18 +246,15 @@ async function generateSingleImage(
   opts?: { quality?: "low" | "medium" | "high"; size?: "1024x1024" | "1024x1536" | "1536x1024" },
 ): Promise<string> {
   const openai = getOpenAI();
-  // DEBUG: gpt-image-1, low quality JPEG — ~$0.01/image, returns b64_json (~125KB)
+  // gpt-image-2, high quality JPEG — higher cost than gpt-image-1/low, returns b64_json
   const resp = await openai.images.generate({
-    model: "gpt-image-1",
-    prompt: prompt.slice(0, 900),
+    model: "gpt-image-2",
+    prompt: prompt.slice(0, 4000),
     n: 1,
     size: opts?.size ?? "1024x1024",
-    quality: opts?.quality ?? "low",
-    // @ts-ignore output_format not yet in SDK types
+    quality: opts?.quality ?? "high",
     output_format: "jpeg",
   });
-  // PRODUCTION (replace above):
-  // quality: "high", output_format: "jpeg", size: "1792x1024"
   const b64 = resp.data?.[0]?.b64_json;
   if (!b64) throw new Error("OpenAI image generation returned no b64_json");
   return b64;
@@ -306,7 +303,9 @@ function insertInfographic(html: string, imageUrl: string, alt: string): string 
   });
 }
 
-const BRAND_STYLE = `Flat vector-style infographic graphic (not a photo). White or very light background. Dark charcoal (#121212) text and outlines. Warm gold (#c8a96e) accent color for numbers, icons, and highlight elements. Bold, clean sans-serif typography (Montserrat-style). Minimal thin-line icons (1.5px stroke). Rounded pill-shaped badges/containers where relevant. Generous whitespace, premium/editorial feel. No photography, no watermark, no logo.`;
+const BRAND_STYLE = `Flat vector-style infographic graphic (not a photo). White or very light background. Dark charcoal (#121212) text and outlines. Warm gold (#c8a96e) accent color for numbers, icons, and highlight elements. Bold, clean sans-serif typography (Montserrat-style). Minimal thin-line icons (1.5px stroke). Rounded pill-shaped badges/containers where relevant. Generous whitespace, premium/editorial feel. No photography, no watermark, no logo.
+The composition must fill the entire image edge-to-edge. Do not leave large empty margins or float a small card in a sea of blank space — if using a card/panel shape, it must span nearly the full width and height of the canvas.
+Do not add any icons, rows, borders, or decorative elements beyond exactly what is specified below. No extra unrelated graphics, no filler icons.`;
 
 interface InfographicPlan {
   type: "steps" | "checklist" | "comparison";
@@ -355,15 +354,15 @@ function buildInfographicPrompt(plan: InfographicPlan): string {
     .join("\n");
   const layoutHint =
     plan.type === "steps"
-      ? "Numbered step-by-step layout, one step per row, each with a small line icon."
+      ? `Numbered step-by-step layout, one step per row. Every single row MUST use the identical badge style: a solid gold circle containing only that row's number (1, 2, 3, ...). Do not substitute a checkmark or any other icon for any row — all ${plan.items.length} rows use the same numbered-circle badge, no exceptions.`
       : plan.type === "checklist"
-      ? "Vertical checklist layout, each item with a checkmark icon."
-      : "Side-by-side comparison layout with two columns.";
-  return `${BRAND_STYLE}
-${layoutHint}
-Title text at top: "${plan.title}"
+      ? `Vertical checklist layout. Every single item MUST use the identical badge style: a solid gold circle containing a checkmark icon. All ${plan.items.length} items use the exact same checkmark badge, no exceptions, no numbers.`
+      : "Side-by-side comparison layout with two columns. Every row MUST use the identical icon style for its column across all rows — no per-row variation.";
+  return `Title text at top: "${plan.title}"
 Items (render this exact text, nothing else):
-${itemsText}`;
+${itemsText}
+${layoutHint}
+${BRAND_STYLE}`;
 }
 
 function sanitizeHTML(html: string): string {
@@ -492,7 +491,7 @@ export async function publishPlanItem(
         } else {
           const infographicPlan = await planInfographic(plan.topic, bodyHtml, keywords);
           const infographicPrompt = buildInfographicPrompt(infographicPlan);
-          const infographicB64 = await generateSingleImage(infographicPrompt, { quality: "medium", size: "1024x1536" });
+          const infographicB64 = await generateSingleImage(infographicPrompt, { quality: "high", size: "1024x1536" });
           const infographicUrl = await uploadImageToShopifyCDN(admin, infographicB64, `${infographicPlan.title} — ENCANTO`);
           finalBodyHtml = insertInfographic(finalBodyHtml, infographicUrl, `${infographicPlan.title} — ENCANTO infographic`);
         }
