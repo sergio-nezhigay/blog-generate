@@ -38,10 +38,10 @@ Public (unauthenticated) routes are `/api/cron/*` — these are POST endpoints p
 
 ### Article generation pipeline (`app/services/blog/articleWriter.server.ts`)
 
-`publishPlanItem(admin, planId, shop)` orchestrates five serial OpenAI calls:
+`publishPlanItem(admin, planId, shop)` orchestrates five serial calls:
 
-1. `enrichKeywords()` — generates 8–12 SEO keywords for the topic
-2. `researchTopic()` — creates a 250–350 word research brief
+1. `enrichKeywords()` — generates 8–12 SEO keywords for the topic (GPT-4o)
+2. `researchTopic()` — creates a 250–350 word research brief, grounded in real-time web search via Perplexity `sonar` (falls back to ungrounded GPT-4o if Perplexity fails or `PERPLEXITY_API_KEY` is unset)
 3. `generateArticleBody()` — writes the full HTML article (target 1800–2200 words, GPT-4o, maxTokens 5500)
 4. `generateArticleMetadata()` — returns `{ title, metaDescription, tags, excerpt }` (GPT-4o JSON mode)
 5. `publishArticleToShopify()` — writes to Shopify via Admin GraphQL `articleCreate`
@@ -104,4 +104,5 @@ Required at runtime:
 - `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`, `SHOPIFY_APP_URL`
 - `DATABASE_URL` — PostgreSQL connection string
 - `OPENAI_API_KEY` — GPT-4o used for all generation
+- `PERPLEXITY_API_KEY` — Perplexity `sonar` used for real-time-grounded topic ideation and pre-writing research (falls back to GPT-4o if unset or on failure)
 - `CRON_SECRET` — shared secret for `/api/cron/*` endpoints

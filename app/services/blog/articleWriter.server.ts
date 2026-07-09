@@ -1,6 +1,7 @@
 import type { BlogSettings } from "@prisma/client";
 import db from "../../db.server";
 import { chatComplete, chatCompleteJSON } from "./openai.server";
+import { sonarComplete } from "./perplexity.server";
 import { getShopifyArticles, publishArticleToShopify, uploadImageToShopifyCDN, setArticleHeroImage } from "./shopifyBlog.server";
 import { getOpenAI } from "./openai.server";
 import type { ShopifyArticle } from "./shopifyBlog.server";
@@ -20,7 +21,7 @@ and serious makeup enthusiasts in Spain, Europe, and the Gulf region.
 Tone: Authoritative, professional, practical. Not beginner-focused. Not budget-focused.
 Year: 2026.
 ENCANTO sells TOOLS ONLY — brushes, tweezers, sponges, eyeshadow palettes. Never invent ENCANTO product names for foundations, lipsticks, eyeliners, mascaras, primers, or any cosmetics. For non-tool products write "a long-wear foundation" or "waterproof mascara" without an ENCANTO brand name.
-NEVER cite statistics, percentages, surveys, or external reports — they will be wrong. Use "many professional MUAs", "industry standard", "experienced artists prefer" instead.
+NEVER invent statistics, percentages, surveys, or external reports out of thin air — only state factual claims that are explicitly present in research provided to you; otherwise use "many professional MUAs", "industry standard", "experienced artists prefer" instead.
 `.trim();
 
 
@@ -48,6 +49,39 @@ Respond with JSON: { "keywords": ["keyword1", "keyword2", ...] }`,
 }
 
 async function researchTopic(topic: string, keywords: string[]): Promise<string> {
+  try {
+    return await sonarComplete(
+      [
+        {
+          role: "system",
+          content: `You are a research assistant for a premium professional makeup tools brand. ${ICP_CONTEXT}
+Only report facts, trends, and practices you can verify from real sources. If you can't find a verifiable figure, describe the trend qualitatively instead of inventing a number.`,
+        },
+        {
+          role: "user",
+          content: `Write a detailed, factual research brief (250-350 words) for this blog article: "${topic}"
+
+Cover:
+- Key insights a professional MUA needs on this topic
+- Common mistakes or misconceptions in the industry
+- Professional standards and best practices
+- Specific tool features or techniques relevant to the topic
+- Current (2026) trends and market context, based on what you actually find
+
+Keywords to weave in naturally: ${keywords.slice(0, 6).join(", ")}
+
+This will be used to write the full article. Be specific and substantive.`,
+        },
+      ],
+      { temperature: 0.4, maxTokens: 600 },
+    );
+  } catch (err) {
+    console.error("[perplexity] researchTopic grounding failed, falling back to GPT-4o:", err instanceof Error ? err.message : err);
+    return researchTopicGPT(topic, keywords);
+  }
+}
+
+async function researchTopicGPT(topic: string, keywords: string[]): Promise<string> {
   return chatComplete(
     [
       {

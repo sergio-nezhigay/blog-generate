@@ -1,5 +1,6 @@
 import db from "../../db.server";
 import { chatCompleteJSON } from "./openai.server";
+import { sonarComplete } from "./perplexity.server";
 import { isDuplicate } from "./deduplication.server";
 import { suggestQAQuestions } from "./poolSuggester.server";
 import type { BlogSettings } from "@prisma/client";
@@ -493,6 +494,66 @@ async function generateTopicForCategory(
     return generateQATopic(cat, brandName, usedTitles, attempt);
   }
 
+  let topic: string;
+  try {
+    topic = await generateGroundedFashionTopic(cat, brandName, usedTitles);
+  } catch (err) {
+    console.error("[perplexity] topic grounding failed, falling back to GPT-4o:", err instanceof Error ? err.message : err);
+    topic = await generateFashionTopicGPT(cat, brandName, usedTitles);
+  }
+
+  // Retry if AI returned an unfilled placeholder pattern, an empty result, or a duplicate
+  if (!topic || topic.includes("[") || isDuplicate(topic, usedTitles)) {
+    return generateTopicForCategory(cat, brandName, usedTitles, attempt + 1);
+  }
+
+  return topic;
+}
+
+async function generateGroundedFashionTopic(
+  cat: ContentCategory,
+  brandName: string,
+  usedTitles: string[],
+): Promise<string> {
+  const monthYear = new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+  const raw = await sonarComplete(
+    [
+      {
+        role: "system",
+        content: `You are a content strategist for ${brandName}, a premium professional makeup tools brand. ${ICP_FILTER}
+Base your answer on what is currently relevant and trending right now — not generic evergreen guesses.`,
+      },
+      {
+        role: "user",
+        content: `Find what is currently relevant/trending right now for this content category, then generate ONE compelling blog article title.
+
+Category: ${cat.name}
+Format: ${cat.format}
+Title pattern to follow: ${cat.titlePattern}
+Current date: ${monthYear}
+
+Requirements:
+- The title must be 50–70 characters
+- It must be specific, not generic (name the actual tool, technique, or product category)
+- It must be relevant to professional makeup artists using premium tools
+- Do NOT use "[" or "]" placeholder syntax
+- Do NOT use any of these already-planned titles: ${usedTitles.slice(0, 20).join(" | ")}
+
+Respond with ONLY the final article title on a single line — no explanation, no citations, no quotation marks.`,
+      },
+    ],
+    { temperature: 0.5, maxTokens: 120 },
+  );
+
+  return raw.trim().replace(/^["']|["']$/g, "").split("\n")[0].trim();
+}
+
+async function generateFashionTopicGPT(
+  cat: ContentCategory,
+  brandName: string,
+  usedTitles: string[],
+): Promise<string> {
   const result = await chatCompleteJSON<{ topic: string }>(
     [
       {
@@ -520,14 +581,7 @@ Respond with JSON: { "topic": "Your Article Title Here" }`,
     { temperature: 0.8, maxTokens: 200 },
   );
 
-  const topic = result.topic?.trim() ?? "";
-
-  // Retry if AI returned an unfilled placeholder pattern or a duplicate
-  if (!topic || topic.includes("[") || isDuplicate(topic, usedTitles)) {
-    return generateTopicForCategory(cat, brandName, usedTitles, attempt + 1);
-  }
-
-  return topic;
+  return result.topic?.trim() ?? "";
 }
 
 async function generateQATopic(
