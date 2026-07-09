@@ -275,18 +275,15 @@ function extractH2Headings(html: string): string[] {
   return matches.map(m => m[1].replace(/<[^>]+>/g, "").trim());
 }
 
-async function generateSingleImage(
-  prompt: string,
-  opts?: { quality?: "low" | "medium" | "high"; size?: "1024x1024" | "1024x1536" | "1536x1024" },
-): Promise<string> {
+async function generateSingleImage(prompt: string): Promise<string> {
   const openai = getOpenAI();
   // gpt-image-2, high quality JPEG — higher cost than gpt-image-1/low, returns b64_json
   const resp = await openai.images.generate({
     model: "gpt-image-2",
     prompt: prompt.slice(0, 4000),
     n: 1,
-    size: opts?.size ?? "1024x1024",
-    quality: opts?.quality ?? "high",
+    size: "1024x1024",
+    quality: "high",
     output_format: "jpeg",
   });
   const b64 = resp.data?.[0]?.b64_json;
@@ -324,79 +321,6 @@ function injectSectionImages(html: string, imageUrls: string[], alts: string[]):
     }
     return match;
   });
-}
-
-function insertInfographic(html: string, imageUrl: string, alt: string): string {
-  // Insert right after the first H2 (h2Count=0)
-  let inserted = false;
-  return html.replace(/<\/h2>/gi, (match) => {
-    if (inserted) return match;
-    inserted = true;
-    const safeAlt = alt.replace(/"/g, "&quot;");
-    return `</h2>\n<img src="${imageUrl}" alt="${safeAlt}" style="width:100%;border-radius:8px;margin:24px 0" loading="lazy">`;
-  });
-}
-
-const BRAND_STYLE = `Flat vector-style infographic graphic (not a photo). White or very light background. Dark charcoal (#121212) text and outlines. Warm gold (#c8a96e) accent color for numbers, icons, and highlight elements. Bold, clean sans-serif typography (Montserrat-style). Minimal thin-line icons (1.5px stroke). Rounded pill-shaped badges/containers where relevant. Generous whitespace, premium/editorial feel. No photography, no watermark, no logo.
-The composition must fill the entire image edge-to-edge. Do not leave large empty margins or float a small card in a sea of blank space — if using a card/panel shape, it must span nearly the full width and height of the canvas.
-Do not add any icons, rows, borders, or decorative elements beyond exactly what is specified below. No extra unrelated graphics, no filler icons.`;
-
-interface InfographicPlan {
-  type: "steps" | "checklist" | "comparison";
-  title: string;
-  items: { label: string; detail?: string }[];
-}
-
-async function planInfographic(
-  topic: string,
-  bodyHtml: string,
-  keywords: string[],
-): Promise<InfographicPlan> {
-  const preview = bodyHtml.slice(0, 3000).replace(/<[^>]+>/g, " ");
-  return chatCompleteJSON<InfographicPlan>(
-    [
-      {
-        role: "system",
-        content: `You are a content designer for a premium makeup tools brand. ${ICP_CONTEXT}
-You are planning a simple infographic graphic to accompany a blog article. Pick whichever format best fits the article's actual content — do not force a format that doesn't fit.
-NEVER invent statistics, percentages, or numeric claims not already present in the article text.`,
-      },
-      {
-        role: "user",
-        content: `Article topic: "${topic}"
-Keywords: ${keywords.join(", ")}
-Article text (stripped of HTML):
-${preview}
-
-Plan a short infographic (3-5 items) summarizing real content from this article.
-
-Respond with JSON:
-{
-  "type": "steps" | "checklist" | "comparison",
-  "title": "Short infographic title (max 6 words)",
-  "items": [{ "label": "short label, max 6 words", "detail": "optional short detail, max 8 words" }]
-}`,
-      },
-    ],
-    { temperature: 0.4, maxTokens: 400 },
-  );
-}
-
-function buildInfographicPrompt(plan: InfographicPlan): string {
-  const itemsText = plan.items
-    .map((item, i) => `${i + 1}. ${item.label}${item.detail ? ` — ${item.detail}` : ""}`)
-    .join("\n");
-  const layoutHint =
-    plan.type === "steps"
-      ? `Numbered step-by-step layout, one step per row. Every single row MUST use the identical badge style: a solid gold circle containing only that row's number (1, 2, 3, ...). Do not substitute a checkmark or any other icon for any row — all ${plan.items.length} rows use the same numbered-circle badge, no exceptions.`
-      : plan.type === "checklist"
-      ? `Vertical checklist layout. Every single item MUST use the identical badge style: a solid gold circle containing a checkmark icon. All ${plan.items.length} items use the exact same checkmark badge, no exceptions, no numbers.`
-      : "Side-by-side comparison layout with two columns. Every row MUST use the identical icon style for its column across all rows — no per-row variation.";
-  return `Title text at top: "${plan.title}"
-Items (render this exact text, nothing else):
-${itemsText}
-${layoutHint}
-${BRAND_STYLE}`;
 }
 
 function sanitizeHTML(html: string): string {
@@ -517,18 +441,6 @@ export async function publishPlanItem(
           sectionUrls.push(cdnUrl);
         }
         finalBodyHtml = injectSectionImages(safeHtml, sectionUrls, sectionAlts);
-      }
-
-      if (settings.enableInfographics) {
-        if (settings.testMode) {
-          finalBodyHtml = insertInfographic(finalBodyHtml, TEST_PLACEHOLDER_IMAGE, `${plan.topic} — ENCANTO infographic`);
-        } else {
-          const infographicPlan = await planInfographic(plan.topic, bodyHtml, keywords);
-          const infographicPrompt = buildInfographicPrompt(infographicPlan);
-          const infographicB64 = await generateSingleImage(infographicPrompt, { quality: "high", size: "1024x1536" });
-          const infographicUrl = await uploadImageToShopifyCDN(admin, infographicB64, `${infographicPlan.title} — ENCANTO`);
-          finalBodyHtml = insertInfographic(finalBodyHtml, infographicUrl, `${infographicPlan.title} — ENCANTO infographic`);
-        }
       }
     } catch (imgErr) {
       console.error("[images] Failed, continuing without images:", imgErr instanceof Error ? imgErr.message : imgErr);

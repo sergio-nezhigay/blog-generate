@@ -25,7 +25,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     servicesUrl: string;
     active: boolean;
     testMode: boolean;
-    enableInfographics: boolean;
     productLinks: ProductLink[];
   };
 
@@ -50,7 +49,6 @@ export default function BlogSettings() {
   const [servicesUrl, setServicesUrl] = useState(settings?.servicesUrl ?? "/pages/collections/all");
   const [active, setActive] = useState(settings?.active ?? false);
   const [testMode, setTestMode] = useState(settings?.testMode ?? false);
-  const [enableInfographics, setEnableInfographics] = useState(settings?.enableInfographics ?? false);
   const [productLinks, setProductLinks] = useState<ProductLink[]>(
     (settings?.productLinks as unknown as ProductLink[]) ?? [],
   );
@@ -79,7 +77,7 @@ export default function BlogSettings() {
 
   const handleSave = () => {
     fetcher.submit(
-      JSON.stringify({ blogId, blogTitle, brandName, ctaUrl, servicesUrl, active, testMode, enableInfographics, productLinks }),
+      JSON.stringify({ blogId, blogTitle, brandName, ctaUrl, servicesUrl, active, testMode, productLinks }),
       { method: "POST", encType: "application/json" },
     );
   };
@@ -221,17 +219,6 @@ export default function BlogSettings() {
             />
             <label htmlFor="testmode-toggle">
               Test mode — publish as draft (hidden from Google, not live on storefront)
-            </label>
-          </s-stack>
-          <s-stack direction="inline" gap="base">
-            <input
-              id="infographics-toggle"
-              type="checkbox"
-              checked={enableInfographics}
-              onChange={(e) => setEnableInfographics(e.target.checked)}
-            />
-            <label htmlFor="infographics-toggle">
-              Generate an on-brand infographic image for each article
             </label>
           </s-stack>
         </s-stack>
