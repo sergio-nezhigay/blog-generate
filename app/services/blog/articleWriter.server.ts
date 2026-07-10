@@ -2,7 +2,7 @@ import type { BlogSettings } from "@prisma/client";
 import db from "../../db.server";
 import { chatComplete, chatCompleteJSON } from "./openai.server";
 import { sonarComplete } from "./perplexity.server";
-import { getShopifyArticles, publishArticleToShopify, uploadImageToShopifyCDN, setArticleHeroImage } from "./shopifyBlog.server";
+import { getShopifyArticles, publishArticleToShopify, uploadImageToShopifyCDN, setArticleHeroImage, getProductOrCollectionImage } from "./shopifyBlog.server";
 import { getOpenAI } from "./openai.server";
 import type { ShopifyArticle } from "./shopifyBlog.server";
 
@@ -109,26 +109,27 @@ This will be used to write the full article. Be specific and substantive.`,
   );
 }
 
+function normalizeText(s: string): string {
+  return s.toLowerCase()
+    .replace(/[áàâä]/g, "a").replace(/[éèêë]/g, "e")
+    .replace(/[íìîï]/g, "i").replace(/[óòôö]/g, "o")
+    .replace(/[úùûü]/g, "u").replace(/ñ/g, "n").replace(/ç/g, "c");
+}
+
 export function selectRelevantArticles(
   topic: string,
   keywords: string[],
   articles: ShopifyArticle[],
   maxResults = 6,
 ): ShopifyArticle[] {
-  const normalize = (s: string) =>
-    s.toLowerCase()
-      .replace(/[áàâä]/g, "a").replace(/[éèêë]/g, "e")
-      .replace(/[íìîï]/g, "i").replace(/[óòôö]/g, "o")
-      .replace(/[úùûü]/g, "u").replace(/ñ/g, "n").replace(/ç/g, "c");
-
   const searchWords = [
     ...topic.split(/\s+/),
     ...keywords.flatMap((k) => k.split(/\s+/)),
-  ].map(normalize).filter((w) => w.length > 3);
+  ].map(normalizeText).filter((w) => w.length > 3);
   const unique = [...new Set(searchWords)];
 
   const scored = articles.map((article) => {
-    const titleWords = article.title.split(/\s+/).map(normalize);
+    const titleWords = article.title.split(/\s+/).map(normalizeText);
     const score = unique.filter((term) =>
       titleWords.some((tw) => tw.includes(term) || term.includes(tw))
     ).length;
@@ -143,6 +144,35 @@ export function selectRelevantArticles(
   });
 
   return scored.slice(0, maxResults).map((s) => s.article);
+}
+
+// Returns ALL productLinks ranked by relevance (best match first) — callers decide
+// how many to actually use, since not every candidate is guaranteed to have a real image.
+export function selectRelevantProductLinks(
+  topic: string,
+  keywords: string[],
+  productLinks: ProductLink[],
+): ProductLink[] {
+  const searchWords = [
+    ...topic.split(/\s+/),
+    ...keywords.flatMap((k) => k.split(/\s+/)),
+  ].map(normalizeText).filter((w) => w.length > 3);
+  const unique = [...new Set(searchWords)];
+
+  const scored = productLinks.map((link, idx) => {
+    const linkWords = [
+      ...link.label.split(/\s+/),
+      ...link.keywords.split(/[,\s]+/),
+    ].map(normalizeText).filter(Boolean);
+    const score = unique.filter((term) =>
+      linkWords.some((lw) => lw.includes(term) || term.includes(lw))
+    ).length;
+    return { link, score, idx };
+  });
+
+  scored.sort((a, b) => (b.score !== a.score ? b.score - a.score : a.idx - b.idx));
+
+  return scored.map((s) => s.link);
 }
 
 async function generateArticleBody(
@@ -163,7 +193,7 @@ async function generateArticleBody(
 
   const productLinksBlock = productLinks.length > 0
     ? productLinks
-        .map((p) => `- "${p.label}" → ${p.url} (relevant keywords: ${p.keywords})`)
+        .map((p) => `- "${p.label}" → ${p.url}`)
         .join("\n")
     : "";
 
@@ -187,7 +217,7 @@ CRITICAL HTML RULES:
 INTERNAL ARTICLE LINKS — you MUST include exactly 2–4 of these links somewhere in the article body paragraphs. This is required, not optional:
 ${articleLinksBlock}
 Anchor text: write a short natural phrase (3–6 words) that fits the sentence — do NOT copy the full title, do NOT repeat the same phrase twice.
-${productLinksBlock.length > 0 ? `\nPRODUCT / COLLECTION LINKS — use 1–2 only when directly relevant to the paragraph:\n${productLinksBlock}\nAnchor text: use the label or a close natural variation.` : ""}
+${productLinksBlock.length > 0 ? `\nPRODUCT / COLLECTION LINKS — you MUST include exactly ${productLinks.length} of the following links, each exactly once, each as a natural anchor inside its own paragraph (do not put two of these links in the same paragraph or sentence). This is required, not optional:\n${productLinksBlock}\nAnchor text: use the label or a close natural variation, written to fit the sentence.` : ""}
 
 CTA LINK: ${settings.ctaUrl}
 COLLECTIONS LINK (use max 1 time): ${settings.servicesUrl}`,
@@ -270,11 +300,6 @@ Respond with JSON:
   );
 }
 
-function extractH2Headings(html: string): string[] {
-  const matches = [...html.matchAll(/<h2[^>]*>(.*?)<\/h2>/gi)];
-  return matches.map(m => m[1].replace(/<[^>]+>/g, "").trim());
-}
-
 async function generateSingleImage(prompt: string): Promise<string> {
   const openai = getOpenAI();
   // gpt-image-2, high quality JPEG — higher cost than gpt-image-1/low, returns b64_json
@@ -291,36 +316,70 @@ async function generateSingleImage(prompt: string): Promise<string> {
   return b64;
 }
 
-async function generateImages(
-  title: string,
-  h2Headings: string[],
-): Promise<{ heroB64: string; sectionB64s: string[] }> {
+async function generateHeroImage(title: string): Promise<string> {
   const heroPrompt = `Professional studio product photo for: ${title.slice(0, 120)}. Clean neutral background, elegant arrangement. No text, no words, no letters. Soft studio lighting.`;
-  const heroB64 = await generateSingleImage(heroPrompt);
-
-  // Pick 2nd and 4th headings (index 1 and 3) for section images
-  const sectionHeadings = [h2Headings[1], h2Headings[3]].filter(Boolean) as string[];
-  const sectionB64s: string[] = [];
-  for (const heading of sectionHeadings) {
-    const sectionPrompt = `Professional macro photo for article "${title.slice(0, 80)}", section about: ${heading.slice(0, 100)}. Studio setting, clean neutral background. No text, no words, no letters.`;
-    sectionB64s.push(await generateSingleImage(sectionPrompt));
-  }
-
-  return { heroB64, sectionB64s };
+  return generateSingleImage(heroPrompt);
 }
 
-function injectSectionImages(html: string, imageUrls: string[], alts: string[]): string {
-  // Insert img tags after the 2nd H2 (h2Count=1) and 4th H2 (h2Count=3)
-  let h2Count = -1;
-  return html.replace(/<\/h2>/gi, (match) => {
-    h2Count++;
-    const urlIndex = h2Count === 1 ? 0 : h2Count === 3 ? 1 : -1;
-    if (urlIndex >= 0 && imageUrls[urlIndex]) {
-      const alt = (alts[urlIndex] ?? "").replace(/"/g, "&quot;");
-      return `</h2>\n<img src="${imageUrls[urlIndex]}" alt="${alt}" style="width:100%;border-radius:8px;margin:24px 0" loading="lazy">`;
+interface ImagePlacement {
+  url: string;
+  imageUrl: string;
+  alt: string;
+}
+
+function normalizeHref(href: string): string {
+  return href.trim().replace(/^https?:\/\/[^/]+/i, "").replace(/\/$/, "").toLowerCase();
+}
+
+function findEnclosingParagraphEnd(html: string, anchorIndex: number): number | null {
+  const openIdx = html.lastIndexOf("<p", anchorIndex);
+  if (openIdx === -1) return null;
+  const prematureClose = html.indexOf("</p>", openIdx);
+  if (prematureClose !== -1 && prematureClose < anchorIndex) return null;
+  const closeIdx = html.indexOf("</p>", anchorIndex);
+  if (closeIdx === -1) return null;
+  return closeIdx + "</p>".length;
+}
+
+function positionalFallbackPoint(html: string, slot: number, totalSlots: number): number {
+  const h2Closes = [...html.matchAll(/<\/h2>/gi)].map((m) => m.index! + m[0].length);
+  if (h2Closes.length === 0) return html.length;
+  const target = Math.min(h2Closes.length - 1, Math.floor(((slot + 1) * h2Closes.length) / (totalSlots + 1)));
+  return h2Closes[target];
+}
+
+function injectProductImages(html: string, placements: ImagePlacement[]): string {
+  const inserts: Array<{ at: number; tag: string }> = [];
+  const anchorRe = /<a\s+[^>]*href="([^"]*)"[^>]*>/gi;
+
+  placements.forEach((p, slot) => {
+    const targetHref = normalizeHref(p.url);
+    let anchorIndex = -1;
+    for (const m of html.matchAll(anchorRe)) {
+      if (normalizeHref(m[1]) === targetHref) {
+        anchorIndex = m.index!;
+        break;
+      }
     }
-    return match;
+    const alt = p.alt.replace(/"/g, "&quot;");
+    const tag = `\n<a href="${p.url}"><img src="${p.imageUrl}" alt="${alt}" style="width:100%;border-radius:8px;margin:24px 0" loading="lazy"></a>`;
+
+    let at: number | null = null;
+    if (anchorIndex !== -1) at = findEnclosingParagraphEnd(html, anchorIndex);
+    if (at === null) {
+      console.warn(`[images] Link "${p.url}" not found as an anchor (or not inside a <p>) in generated HTML — using positional fallback`);
+      at = positionalFallbackPoint(html, slot, placements.length);
+    }
+    inserts.push({ at, tag });
   });
+
+  // Insert back-to-front so earlier insertions don't shift later insertion offsets
+  inserts.sort((a, b) => b.at - a.at);
+  let result = html;
+  for (const { at, tag } of inserts) {
+    result = result.slice(0, at) + tag + result.slice(at);
+  }
+  return result;
 }
 
 function sanitizeHTML(html: string): string {
@@ -400,6 +459,33 @@ export async function publishPlanItem(
     const { articles: existingArticles, blogHandle } = await getShopifyArticles(admin, settings.blogId);
     const linkCandidates = selectRelevantArticles(plan.topic, keywords, existingArticles);
     const productLinks = (settings.productLinks as unknown as ProductLink[]) ?? [];
+    const rankedProductLinks = selectRelevantProductLinks(plan.topic, keywords, productLinks);
+
+    // Walk ranked candidates fetching real images, stopping once 2 succeed. Some configured
+    // URLs are storefront redirects (e.g. /collections/brochas -> /collections/brushes) that
+    // don't resolve via Admin API handle lookup, so a candidate may score well but have no
+    // image — in that case skip it and try the next-best candidate instead of losing a slot.
+    const MAX_CANDIDATES_CHECKED = 6;
+    const selectedProductLinks: Array<ProductLink & { imageUrl: string; imageAlt: string }> = [];
+    for (const link of rankedProductLinks.slice(0, MAX_CANDIDATES_CHECKED)) {
+      if (selectedProductLinks.length >= 2) break;
+      const img = await getProductOrCollectionImage(admin, link.url);
+      if (img) {
+        selectedProductLinks.push({ ...link, imageUrl: img.imageUrl, imageAlt: img.altText || link.label });
+      } else {
+        console.warn(`[images] "${link.url}" has no resolvable image (may be a redirect/stale handle) — trying next candidate`);
+      }
+    }
+    if (
+      selectedProductLinks.length < 2 &&
+      /^\/(products|collections)\//.test(settings.servicesUrl) &&
+      !selectedProductLinks.some((l) => l.url === settings.servicesUrl)
+    ) {
+      const img = await getProductOrCollectionImage(admin, settings.servicesUrl);
+      if (img) {
+        selectedProductLinks.push({ url: settings.servicesUrl, label: "our collection", keywords: "", imageUrl: img.imageUrl, imageAlt: img.altText || "our collection" });
+      }
+    }
 
     // 4. Article body (HTML)
     const bodyHtml = await generateArticleBody(
@@ -409,7 +495,7 @@ export async function publishPlanItem(
       research,
       linkCandidates,
       blogHandle,
-      productLinks,
+      selectedProductLinks,
       settings,
     );
 
@@ -419,28 +505,27 @@ export async function publishPlanItem(
     // 6. Sanitize + restructure layout
     const safeHtml = restructureArticleLayout(sanitizeHTML(bodyHtml));
 
-    // 7. Generate images and inject into body (non-blocking — article still publishes on failure)
+    // 7. Inject the pre-fetched product/collection images into the body, generate hero (non-blocking — article still publishes on failure)
     const TEST_PLACEHOLDER_IMAGE = "https://cdn.shopify.com/s/files/1/0931/1715/3605/files/article-image_ae12866e-ff85-453e-8126-c60b0982a430.jpg?v=1782118191";
     let finalBodyHtml = safeHtml;
     let heroImageUrl: string | null = null;
-    let sectionAlts: string[] = [];
     try {
-      const h2Headings = extractH2Headings(safeHtml);
-      sectionAlts = [h2Headings[1] ?? plan.topic, h2Headings[3] ?? plan.topic];
+      // Body images already fetched above (step 3) — real product/collection CDN images,
+      // cheap GraphQL reads that ran for real in test mode too (only the paid AI hero
+      // generation below is mocked).
+      const placements: ImagePlacement[] = selectedProductLinks.map((l) => ({
+        url: l.url,
+        imageUrl: l.imageUrl,
+        alt: l.imageAlt,
+      }));
+      finalBodyHtml = injectProductImages(safeHtml, placements);
 
       if (settings.testMode) {
         // Skip OpenAI in test mode — use placeholder to avoid generation costs
         heroImageUrl = TEST_PLACEHOLDER_IMAGE;
-        finalBodyHtml = injectSectionImages(safeHtml, [TEST_PLACEHOLDER_IMAGE, TEST_PLACEHOLDER_IMAGE], sectionAlts);
       } else {
-        const { heroB64, sectionB64s } = await generateImages(plan.topic, h2Headings);
+        const heroB64 = await generateHeroImage(plan.topic);
         heroImageUrl = await uploadImageToShopifyCDN(admin, heroB64, `${plan.topic} — ENCANTO`);
-        const sectionUrls: string[] = [];
-        for (let i = 0; i < sectionB64s.length; i++) {
-          const cdnUrl = await uploadImageToShopifyCDN(admin, sectionB64s[i], `${sectionAlts[i]} — ENCANTO`);
-          sectionUrls.push(cdnUrl);
-        }
-        finalBodyHtml = injectSectionImages(safeHtml, sectionUrls, sectionAlts);
       }
     } catch (imgErr) {
       console.error("[images] Failed, continuing without images:", imgErr instanceof Error ? imgErr.message : imgErr);

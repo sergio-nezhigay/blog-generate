@@ -146,6 +146,47 @@ export async function setArticleHeroImage(
   }
 }
 
+// Resolves a /products/<handle> or /collections/<handle> URL to its real Shopify image.
+// Returns null for non-product/collection URLs, missing handles, or items with no image.
+export async function getProductOrCollectionImage(
+  admin: { graphql: AdminGraphQL },
+  url: string,
+): Promise<{ imageUrl: string; altText: string } | null> {
+  const productMatch = url.match(/^\/products\/([^/?#]+)/);
+  const collectionMatch = url.match(/^\/collections\/([^/?#]+)/);
+  if (!productMatch && !collectionMatch) return null;
+
+  if (productMatch) {
+    const handle = productMatch[1];
+    const resp = await admin.graphql(`
+      query GetProductImage($handle: String!) {
+        productByIdentifier(identifier: { handle: $handle }) {
+          featuredMedia { preview { image { url altText } } }
+        }
+      }
+    `, { variables: { handle } });
+    const { data } = await resp.json() as {
+      data?: { productByIdentifier: { featuredMedia: { preview: { image: { url: string; altText: string | null } | null } | null } | null } | null };
+    };
+    const image = data?.productByIdentifier?.featuredMedia?.preview?.image;
+    return image ? { imageUrl: image.url, altText: image.altText ?? "" } : null;
+  }
+
+  const handle = collectionMatch![1];
+  const resp = await admin.graphql(`
+    query GetCollectionImage($handle: String!) {
+      collectionByIdentifier(identifier: { handle: $handle }) {
+        image { url altText }
+      }
+    }
+  `, { variables: { handle } });
+  const { data } = await resp.json() as {
+    data?: { collectionByIdentifier: { image: { url: string; altText: string | null } | null } | null };
+  };
+  const image = data?.collectionByIdentifier?.image;
+  return image ? { imageUrl: image.url, altText: image.altText ?? "" } : null;
+}
+
 export interface ShopifyBlog {
   id: string;
   title: string;
