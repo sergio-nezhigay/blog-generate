@@ -346,7 +346,7 @@ function extractFaqItems(html: string): Array<{ q: string; a: string }> {
   return items;
 }
 
-function buildFaqPageSchema(items: Array<{ q: string; a: string }>): string {
+function buildFaqPageSchemaJson(items: Array<{ q: string; a: string }>): string {
   const schema = {
     "@context": "https://schema.org",
     "@type": "FAQPage",
@@ -356,7 +356,7 @@ function buildFaqPageSchema(items: Array<{ q: string; a: string }>): string {
       acceptedAnswer: { "@type": "Answer", text: a },
     })),
   };
-  return `\n<script type="application/ld+json">\n${JSON.stringify(schema, null, 2)}\n</script>`;
+  return JSON.stringify(schema);
 }
 
 function restructureArticleLayout(html: string): string {
@@ -446,11 +446,10 @@ export async function publishPlanItem(
       console.error("[images] Failed, continuing without images:", imgErr instanceof Error ? imgErr.message : imgErr);
     }
 
-    // 8. Inject FAQPage JSON-LD if article has a FAQ section
+    // 8. Build FAQPage JSON-LD if article has a FAQ section (stored as a metafield —
+    // Shopify strips <script> tags from article body, so it can't be embedded inline)
     const faqItems = extractFaqItems(finalBodyHtml);
-    if (faqItems.length > 0) {
-      finalBodyHtml += buildFaqPageSchema(faqItems);
-    }
+    const faqSchemaJson = faqItems.length > 0 ? buildFaqPageSchemaJson(faqItems) : null;
 
     // 9. Publish to Shopify
     const displayTitle = (meta.title && meta.title.trim()) || plan.topic;
@@ -464,6 +463,7 @@ export async function publishPlanItem(
       authorName: brandName,
       seoTitle: buildSeoTitle(displayTitle, brandName),
       metaDescription: truncateMetaDescription(meta.metaDescription || ""),
+      faqSchemaJson,
     });
 
     // 10. Set hero image on the published article

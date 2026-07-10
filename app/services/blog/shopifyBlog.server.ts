@@ -325,6 +325,7 @@ export async function publishArticleToShopify(
     authorName?: string;
     seoTitle?: string;
     metaDescription?: string;
+    faqSchemaJson?: string | null;
   },
 ): Promise<{ id: string; handle: string; blogHandle: string }> {
   const metafields: { namespace: string; key: string; value: string; type: string }[] = [];
@@ -333,6 +334,9 @@ export async function publishArticleToShopify(
   }
   if (article.metaDescription?.trim()) {
     metafields.push({ namespace: "global", key: "description_tag", value: article.metaDescription.trim(), type: "single_line_text_field" });
+  }
+  if (article.faqSchemaJson) {
+    metafields.push({ namespace: "custom", key: "faq_schema", value: article.faqSchemaJson, type: "json" });
   }
 
   const response = await admin.graphql(`
