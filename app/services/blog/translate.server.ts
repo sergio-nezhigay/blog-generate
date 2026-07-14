@@ -14,7 +14,10 @@ interface TranslatedFields {
 }
 
 const TRANSLATE_SYSTEM_PROMPT = `You are a professional translator for ENCANTO, a professional makeup tools brand.
-Translate the given article fields into {LANG}. Rules:
+Translate every given field fully into {LANG}. Rules:
+- "title" and "metaTitle" are headlines, not proper nouns or trademarks — translate every word in them into {LANG} exactly like you would a sentence. Never return a headline unchanged just because it contains a brand name.
+- The only words that stay unchanged in ANY field are brand/product proper nouns (e.g. "ENCANTO", "Zoeva") and the literal string "| ENCANTO" suffix if present at the end of metaTitle. Every other word — including comparison words like "vs", "and", connectors, and descriptors — must be translated.
+- Example, translating the headline "ENCANTO vs Zoeva Face Brush Sets: Flawless Application" into French: "Sets de pinceaux visage ENCANTO vs Zoeva : une application impeccable" — note only "ENCANTO" and "Zoeva" stay in Latin script; everything else is translated. Apply this same standard to {LANG}.
 - Preserve ALL HTML tags, attributes, "id" values, "class" values, and "href" values EXACTLY as-is — do not translate or alter them.
 - Only translate visible text content (inside <p>, <h2>, <h3>, <summary>, <a> link text, <strong>, <li>, alt text in <img>).
 - Do not translate anchor "id" slugs (e.g. id="introduction" stays "introduction") since internal links depend on them.
@@ -30,7 +33,7 @@ export async function translateArticleFields(
     { role: "system", content: TRANSLATE_SYSTEM_PROMPT.replace("{LANG}", langName) },
     {
       role: "user",
-      content: `Title: ${fields.title}\n\nSummary HTML: ${fields.summaryHtml}\n\nMeta title: ${fields.metaTitle}\n\nMeta description: ${fields.metaDescription}\n\nBody HTML:\n${fields.bodyHtml}`,
+      content: `Title (headline — translate fully into ${langName}): ${fields.title}\n\nSummary HTML: ${fields.summaryHtml}\n\nMeta title (headline — translate fully into ${langName}): ${fields.metaTitle}\n\nMeta description: ${fields.metaDescription}\n\nBody HTML:\n${fields.bodyHtml}`,
     },
   ], { model: "gpt-4o-mini", temperature: 0.3, maxTokens: 16000 });
 }
