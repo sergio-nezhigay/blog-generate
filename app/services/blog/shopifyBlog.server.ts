@@ -354,6 +354,60 @@ export async function updateArticleContent(
   }
 }
 
+export interface TranslatableContent {
+  key: string;
+  value: string;
+  digest: string;
+}
+
+export async function getTranslatableContent(
+  admin: { graphql: AdminGraphQL },
+  resourceGid: string,
+): Promise<TranslatableContent[]> {
+  const resp = await admin.graphql(`
+    query GetTranslatableContent($id: ID!) {
+      translatableResource(resourceId: $id) {
+        translatableContent {
+          key
+          value
+          digest
+        }
+      }
+    }
+  `, { variables: { id: resourceGid } });
+  const { data } = await resp.json() as {
+    data: { translatableResource: { translatableContent: TranslatableContent[] } | null };
+  };
+  return data.translatableResource?.translatableContent ?? [];
+}
+
+export async function registerTranslations(
+  admin: { graphql: AdminGraphQL },
+  resourceGid: string,
+  locale: string,
+  translations: { key: string; value: string; translatableContentDigest: string }[],
+): Promise<void> {
+  const resp = await admin.graphql(`
+    mutation TranslationsRegister($id: ID!, $translations: [TranslationInput!]!) {
+      translationsRegister(resourceId: $id, translations: $translations) {
+        translations { locale key }
+        userErrors { field message }
+      }
+    }
+  `, {
+    variables: {
+      id: resourceGid,
+      translations: translations.map(t => ({ ...t, locale })),
+    },
+  });
+  const { data } = await resp.json() as {
+    data: { translationsRegister: { userErrors: Array<{ field: string; message: string }> } };
+  };
+  if (data.translationsRegister.userErrors.length > 0) {
+    throw new Error(data.translationsRegister.userErrors.map(e => e.message).join(", "));
+  }
+}
+
 export async function publishArticleToShopify(
   admin: { graphql: AdminGraphQL },
   blogId: string,

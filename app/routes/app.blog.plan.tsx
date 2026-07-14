@@ -58,7 +58,23 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const weekStart = getWeekStart(new Date());
   const planExists = await weekAlreadyPlanned(session.shop, weekStart);
 
-  return { plans, settings, planExists };
+  // Translation progress per plan (only meaningful for published articles)
+  const publishedPlanIds = plans.filter((p) => p.status === "published").map((p) => p.id);
+  const translationCounts: Record<number, { done: number; total: number }> = {};
+  if (publishedPlanIds.length > 0) {
+    const rows = await db.articleTranslation.findMany({
+      where: { planId: { in: publishedPlanIds } },
+      select: { planId: true, status: true },
+    });
+    for (const row of rows) {
+      const entry = translationCounts[row.planId] ?? { done: 0, total: 0 };
+      entry.total += 1;
+      if (row.status === "done") entry.done += 1;
+      translationCounts[row.planId] = entry;
+    }
+  }
+
+  return { plans, settings, planExists, translationCounts };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -202,7 +218,7 @@ const STATUS_COLOR: Record<string, string> = {
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export default function BlogPlan() {
-  const { plans, settings, planExists } = useLoaderData<typeof loader>();
+  const { plans, settings, planExists, translationCounts } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
 
   const isGenerating =
@@ -446,6 +462,11 @@ export default function BlogPlan() {
                       {plan.status === "published" && plan.publishedAt && (
                         <div style={{ fontSize: "11px", color: "#6d7175", marginTop: "2px" }}>
                           {new Date(plan.publishedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" })}
+                        </div>
+                      )}
+                      {plan.status === "published" && settings?.translationEnabled && translationCounts[plan.id] && (
+                        <div style={{ fontSize: "11px", color: "#6d7175", marginTop: "2px" }}>
+                          {translationCounts[plan.id].done}/{translationCounts[plan.id].total} translated
                         </div>
                       )}
                     </td>

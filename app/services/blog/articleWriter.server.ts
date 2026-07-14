@@ -3,6 +3,7 @@ import db from "../../db.server";
 import { chatComplete, chatCompleteJSON } from "./openai.server";
 import { sonarComplete } from "./perplexity.server";
 import { getShopifyArticles, publishArticleToShopify, uploadImageToShopifyCDN, setArticleHeroImage, getProductOrCollectionImage } from "./shopifyBlog.server";
+import { enqueueTranslations } from "./translate.server";
 import { getOpenAI } from "./openai.server";
 import type { ShopifyArticle } from "./shopifyBlog.server";
 
@@ -580,6 +581,11 @@ export async function publishPlanItem(
         keywords,
         errorMessage: null,
       },
+    });
+
+    // 12. Enqueue background translations (non-fatal — the English article is already live)
+    await enqueueTranslations(planId, shop).catch((err) => {
+      console.error(`[translate] enqueueTranslations failed for plan ${planId}:`, err);
     });
   } catch (err) {
     await db.blogContentPlan.update({

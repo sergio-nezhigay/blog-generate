@@ -26,6 +26,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     active: boolean;
     testMode: boolean;
     productLinks: ProductLink[];
+    translationEnabled: boolean;
+    translationLocales: string[];
   };
 
   const data = { ...body, productLinks: body.productLinks as unknown as Parameters<typeof db.blogSettings.upsert>[0]["create"]["productLinks"] };
@@ -52,6 +54,16 @@ export default function BlogSettings() {
   const [productLinks, setProductLinks] = useState<ProductLink[]>(
     (settings?.productLinks as unknown as ProductLink[]) ?? [],
   );
+  const [translationEnabled, setTranslationEnabled] = useState(settings?.translationEnabled ?? false);
+  const [translationLocales, setTranslationLocales] = useState<string[]>(
+    settings?.translationLocales ?? ALL_LOCALES.map((l) => l.code),
+  );
+
+  function toggleLocale(code: string) {
+    setTranslationLocales((prev) =>
+      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code],
+    );
+  }
 
   function addProductLink() {
     setProductLinks((prev) => [...prev, { url: "", label: "", keywords: "" }]);
@@ -77,7 +89,10 @@ export default function BlogSettings() {
 
   const handleSave = () => {
     fetcher.submit(
-      JSON.stringify({ blogId, blogTitle, brandName, ctaUrl, servicesUrl, active, testMode, productLinks }),
+      JSON.stringify({
+        blogId, blogTitle, brandName, ctaUrl, servicesUrl, active, testMode, productLinks,
+        translationEnabled, translationLocales,
+      }),
       { method: "POST", encType: "application/json" },
     );
   };
@@ -224,6 +239,37 @@ export default function BlogSettings() {
         </s-stack>
       </s-section>
 
+      <s-section heading="Translation">
+        <s-stack direction="block" gap="base">
+          <s-stack direction="inline" gap="base">
+            <input
+              id="translation-toggle"
+              type="checkbox"
+              checked={translationEnabled}
+              onChange={(e) => setTranslationEnabled(e.target.checked)}
+            />
+            <label htmlFor="translation-toggle">
+              Enable multi-language translation (GPT-4o-mini, published in the background after each article goes live)
+            </label>
+          </s-stack>
+          {translationEnabled && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: "8px" }}>
+              {ALL_LOCALES.map((locale) => (
+                <s-stack key={locale.code} direction="inline" gap="base">
+                  <input
+                    id={`locale-${locale.code}`}
+                    type="checkbox"
+                    checked={translationLocales.includes(locale.code)}
+                    onChange={() => toggleLocale(locale.code)}
+                  />
+                  <label htmlFor={`locale-${locale.code}`}>{locale.name}</label>
+                </s-stack>
+              ))}
+            </div>
+          )}
+        </s-stack>
+      </s-section>
+
       <s-section>
         <s-stack direction="inline" gap="base">
           <s-button
@@ -242,6 +288,16 @@ export default function BlogSettings() {
     </s-page>
   );
 }
+
+const ALL_LOCALES = [
+  { code: "ar", name: "Arabic" }, { code: "cs", name: "Czech" }, { code: "da", name: "Danish" },
+  { code: "de", name: "German" }, { code: "el", name: "Greek" }, { code: "es", name: "Spanish" },
+  { code: "fi", name: "Finnish" }, { code: "fr", name: "French" }, { code: "hu", name: "Hungarian" },
+  { code: "it", name: "Italian" }, { code: "nl", name: "Dutch" }, { code: "no", name: "Norwegian" },
+  { code: "pl", name: "Polish" }, { code: "ro", name: "Romanian" }, { code: "ru", name: "Russian" },
+  { code: "sk", name: "Slovak" }, { code: "sv", name: "Swedish" }, { code: "tr", name: "Turkish" },
+  { code: "uk", name: "Ukrainian" },
+];
 
 const inputStyle: React.CSSProperties = {
   width: "100%",

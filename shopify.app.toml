@@ -7,7 +7,7 @@ name = "blog-generate"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_products,write_metaobjects,write_metaobject_definitions,write_content,read_content,write_online_store_pages,read_online_store_pages,write_files"
+scopes = "write_products,write_metaobjects,write_metaobject_definitions,write_content,read_content,write_online_store_pages,read_online_store_pages,write_files,read_translations,write_translations"
 
 [product.metafields.app.demo_info]
 type = "single_line_text_field"

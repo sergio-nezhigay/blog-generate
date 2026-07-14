@@ -13,11 +13,11 @@ export function getOpenAI(): OpenAI {
 
 export async function chatComplete(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
-  opts: { temperature?: number; maxTokens?: number } = {},
+  opts: { temperature?: number; maxTokens?: number; model?: string } = {},
 ): Promise<string> {
   const openai = getOpenAI();
   const res = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: opts.model ?? "gpt-4o",
     messages,
     temperature: opts.temperature ?? 0.7,
     max_tokens: opts.maxTokens ?? 4000,
@@ -27,11 +27,11 @@ export async function chatComplete(
 
 export async function chatCompleteJSON<T>(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
-  opts: { temperature?: number; maxTokens?: number } = {},
+  opts: { temperature?: number; maxTokens?: number; model?: string } = {},
 ): Promise<T> {
   const openai = getOpenAI();
   const res = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: opts.model ?? "gpt-4o",
     messages,
     temperature: opts.temperature ?? 0.7,
     max_tokens: opts.maxTokens ?? 4000,

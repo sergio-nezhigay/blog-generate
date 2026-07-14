@@ -48,4 +48,9 @@ cron.schedule('0 12 1 * *', () => {
   call('/api/cron/refresh');
 });
 
-console.log('[cron] Scheduler running. Next: Mon 09:00 UTC weekly, daily 10:00 UTC (retry 11:00 UTC), 1st of month 12:00 UTC refresh.');
+// Every 10 minutes — drain the background article-translation queue
+cron.schedule('*/10 * * * *', () => {
+  call('/api/cron/translate');
+});
+
+console.log('[cron] Scheduler running. Next: Mon 09:00 UTC weekly, daily 10:00 UTC (retry 11:00 UTC), 1st of month 12:00 UTC refresh, every 10 min translation queue.');

@@ -69,6 +69,24 @@ model BlogSettings {
   extendedQAQuestions       Json @default("{}")
   extendedFashionCategories Json @default("[]")
   productLinks              Json @default("[]")
+  translationEnabled Boolean  @default(false)
+  translationLocales String[] @default(["ar","cs","da","de","el","es","fi","fr","hu","it","nl","no","pl","ro","ru","sk","sv","tr","uk"])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model ArticleTranslation {
+  id           Int       @id @default(autoincrement())
+  planId       Int
+  shop         String
+  locale       String
+  status       String    @default("pending") // pending | translating | done | failed
+  attempts     Int       @default(0)
+  errorMessage String?
+  translatedAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([planId, locale])
+  @@index([shop, status])
 }
