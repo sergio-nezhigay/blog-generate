@@ -92,6 +92,13 @@ export async function translateQueuedItem(
       metaDescription: metaDescription?.value ?? "",
     }, row.locale, langName);
 
+    // GPT-4o-mini sometimes omits summaryHtml from its JSON output when it's byte-identical to
+    // metaDescription in the source (treats it as a duplicate). Since the source text is provably
+    // the same, reuse the translated metaDescription rather than fail the whole locale.
+    if (!translated.summaryHtml && summary && metaDescription && summary.value === metaDescription.value) {
+      translated.summaryHtml = translated.metaDescription;
+    }
+
     const translations: { key: string; value: string; translatableContentDigest: string }[] = [
       { key: "title", value: translated.title, translatableContentDigest: title.digest },
       { key: "body_html", value: translated.bodyHtml, translatableContentDigest: bodyContent.digest },
