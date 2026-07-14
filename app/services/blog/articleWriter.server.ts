@@ -370,6 +370,8 @@ function injectProductImages(html: string, placements: ImagePlacement[]): string
     if (at === null) {
       console.warn(`[images] Link "${p.url}" not found as an anchor (or not inside a <p>) in generated HTML — using positional fallback`);
       at = positionalFallbackPoint(html, slot, placements.length);
+    } else {
+      console.log(`[images][debug] slot ${slot}: anchor for "${p.url}" matched at char ${anchorIndex}, image inserted after enclosing <p> (char ${at})`);
     }
     inserts.push({ at, tag });
   });
@@ -461,6 +463,7 @@ export async function publishPlanItem(
     const linkCandidates = selectRelevantArticles(plan.topic, keywords, existingArticles);
     const productLinks = (settings.productLinks as unknown as ProductLink[]) ?? [];
     const rankedProductLinks = selectRelevantProductLinks(plan.topic, keywords, productLinks);
+    console.log(`[images][debug] topic="${plan.topic}" ranked candidates:`, rankedProductLinks.map((l) => `${l.label} (${l.url})`));
 
     // Walk ranked candidates fetching real images, stopping once 2 succeed. Some configured
     // URLs are storefront redirects (e.g. /collections/brochas -> /collections/brushes) that
@@ -473,6 +476,7 @@ export async function publishPlanItem(
       const img = await getProductOrCollectionImage(admin, link.url);
       if (img) {
         selectedProductLinks.push({ ...link, imageUrl: img.imageUrl, imageAlt: img.altText || link.label });
+        console.log(`[images][debug] resolved "${link.url}" -> ${img.imageUrl}`);
       } else {
         console.warn(`[images] "${link.url}" has no resolvable image (may be a redirect/stale handle) — trying next candidate`);
       }
@@ -485,8 +489,10 @@ export async function publishPlanItem(
       const img = await getProductOrCollectionImage(admin, settings.servicesUrl);
       if (img) {
         selectedProductLinks.push({ url: settings.servicesUrl, label: "our collection", keywords: "", imageUrl: img.imageUrl, imageAlt: img.altText || "our collection" });
+        console.log(`[images][debug] used servicesUrl fallback: "${settings.servicesUrl}" -> ${img.imageUrl}`);
       }
     }
+    console.log(`[images][debug] final selectedProductLinks:`, selectedProductLinks.map((l) => `${l.label} (${l.url}) img=${l.imageUrl}`));
 
     // 4. Article body (HTML)
     const bodyHtml = await generateArticleBody(
@@ -524,12 +530,22 @@ export async function publishPlanItem(
       if (settings.testMode) {
         // Skip OpenAI in test mode — use placeholder to avoid generation costs
         heroImageUrl = TEST_PLACEHOLDER_IMAGE;
+        console.log(`[images][debug] hero image: test-mode placeholder used`);
       } else {
         const heroB64 = await generateHeroImage(plan.topic);
         heroImageUrl = await uploadImageToShopifyCDN(admin, heroB64, `${plan.topic} — ENCANTO`);
+        console.log(`[images][debug] hero image: generated -> ${heroImageUrl}`);
       }
     } catch (imgErr) {
       console.error("[images] Failed, continuing without images:", imgErr instanceof Error ? imgErr.message : imgErr);
+    }
+
+    console.log(
+      `[images][debug] internal article links required: ${linkCandidates.length ? linkCandidates.map((a) => a.handle).join(", ") : "(none offered)"}`,
+    );
+    for (const a of linkCandidates) {
+      const href = `/blogs/${blogHandle}/${a.handle}`;
+      console.log(`[images][debug] internal link "${href}" present in body: ${finalBodyHtml.includes(href)}`);
     }
 
     // 8. Build FAQPage JSON-LD if article has a FAQ section (stored as a metafield —
