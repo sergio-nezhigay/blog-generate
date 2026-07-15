@@ -16,7 +16,7 @@ import {
 } from "../services/blog/contentPlanner.server";
 import { publishPlanItem } from "../services/blog/articleWriter.server";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 15;
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
