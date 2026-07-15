@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { useFetcher, useLoaderData } from "react-router";
+import { useFetcher, useLoaderData, useSearchParams } from "react-router";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import {
@@ -16,17 +16,25 @@ import {
 } from "../services/blog/contentPlanner.server";
 import { publishPlanItem } from "../services/blog/articleWriter.server";
 
+const PAGE_SIZE = 20;
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
 
-  const [plans, settings] = await Promise.all([
+  const url = new URL(request.url);
+  const page = Math.max(1, parseInt(url.searchParams.get("page") ?? "1", 10) || 1);
+
+  const [plans, totalCount, settings] = await Promise.all([
     db.blogContentPlan.findMany({
       where: { shop: session.shop },
       orderBy: { scheduledDate: "desc" },
-      take: 28,
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
     }),
+    db.blogContentPlan.count({ where: { shop: session.shop } }),
     db.blogSettings.findUnique({ where: { shop: session.shop } }),
   ]);
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   // On-demand Shopify sync: detect articles deleted outside the app
   const publishedPlans = plans.filter(
@@ -74,7 +82,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
   }
 
-  return { plans, settings, planExists, translationCounts };
+  return { plans, settings, planExists, translationCounts, page, totalPages, totalCount };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -218,8 +226,18 @@ const STATUS_COLOR: Record<string, string> = {
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export default function BlogPlan() {
-  const { plans, settings, planExists, translationCounts } = useLoaderData<typeof loader>();
+  const { plans, settings, planExists, translationCounts, page, totalPages, totalCount } =
+    useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
+  const [, setSearchParams] = useSearchParams();
+
+  function goToPage(nextPage: number) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("page", String(nextPage));
+      return next;
+    });
+  }
 
   const isGenerating =
     fetcher.state !== "idle" && fetcher.formData?.get("intent") === "generatePlan";
@@ -568,6 +586,27 @@ export default function BlogPlan() {
             </tbody>
           </table></div>
           </div>
+          {totalPages > 1 && (
+            <div style={paginationStyle}>
+              <s-button
+                variant="secondary"
+                onClick={() => goToPage(page - 1)}
+                {...(page <= 1 ? { disabled: true } : {})}
+              >
+                Previous
+              </s-button>
+              <span style={{ fontSize: "13px", color: "#6d7175" }}>
+                Page {page} of {totalPages} ({totalCount} total)
+              </span>
+              <s-button
+                variant="secondary"
+                onClick={() => goToPage(page + 1)}
+                {...(page >= totalPages ? { disabled: true } : {})}
+              >
+                Next
+              </s-button>
+            </div>
+          )}
           <p style={noteStyle}>
             Publishing takes 90–120 seconds (keywords → research → article → images → Shopify). Keep this page open.
           </p>
@@ -632,6 +671,14 @@ const summaryStyle: React.CSSProperties = {
   fontSize: "13px",
   color: "#6d7175",
   flexWrap: "wrap",
+};
+
+const paginationStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "16px",
+  padding: "16px 12px 4px",
 };
 
 const summaryItemStyle: React.CSSProperties = {
